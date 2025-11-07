@@ -200,6 +200,7 @@ function TwoDotsGame() {
     setShowDebug(false);
   };
 
+
   const initializeGrid = (opts = undefined) => {
     const keepPvp = !!(opts && typeof opts === 'object' && opts.keepPvp);
     const size = 4;

@@ -1,0 +1,34 @@
+{
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "baseBuilder": {
+    "ownerAddress": "0x0000000000000000000000000000000000000000"
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "Two Dots Game",
+    "homeUrl": "https://example.com",
+    "iconUrl": "https://example.com/icon.png",
+    "splashImageUrl": "https://example.com/splash.png",
+    "splashBackgroundColor": "#000000",
+    "webhookUrl": "https://example.com/api/webhook",
+    "subtitle": "Fast, fun, social",
+    "description": "A fast, fun way to match dots.",
+    "screenshotUrls": [
+      "https://example.com/s1.png",
+      "https://example.com/s2.png",
+      "https://example.com/s3.png"
+    ],
+    "primaryCategory": "social",
+    "tags": ["game", "puzzle", "two-dots"],
+    "heroImageUrl": "https://example.com/hero.png",
+    "tagline": "Play instantly",
+    "ogTitle": "Two Dots Game",
+    "ogDescription": "Challenge friends to match dots.",
+    "ogImageUrl": "https://example.com/og.png",
+    "noindex": false
+  }
+}
