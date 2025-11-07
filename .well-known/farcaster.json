@@ -9,7 +9,7 @@
   },
   "miniapp": {
     "version": "1",
-    "name": "TWO DOTS",
+    "name": "Crypto Portfolio Tracker",
     "homeUrl": "https://two-dots-game-v3.vercel.app/",
     "iconUrl": "https://ex.co/i.png",
     "splashImageUrl": "https://ex.co/l.png",
