@@ -204,8 +204,8 @@ function TwoDotsGame() {
       setIsConnecting(true);
       setPaymentStatus('');
       const sdk = window.__farcasterMiniappSDK;
-      // Prefer window.ethereum
-      const eth = window.ethereum || sdk?.ethereum || sdk?.wallet?.ethereum || null;
+      // Prefer Farcaster SDK provider first, then fallback to window.ethereum
+      const eth = (sdk?.ethereum || sdk?.wallet?.ethereum || window.ethereum || null);
       if (!eth) {
         setPaymentStatus('⚠️ No wallet provider found. Install MetaMask or use Farcaster Miniapp.');
         return;
@@ -254,7 +254,8 @@ function TwoDotsGame() {
         if (!walletAddress) return;
       }
       const sdk = window.__farcasterMiniappSDK;
-      const eth = window.ethereum || sdk?.ethereum || sdk?.wallet?.ethereum || null;
+      // Prefer Farcaster SDK provider first, then fallback to window.ethereum
+      const eth = (sdk?.ethereum || sdk?.wallet?.ethereum || window.ethereum || null);
       if (!eth) {
         setPaymentStatus('⚠️ No wallet provider found.');
         return;
