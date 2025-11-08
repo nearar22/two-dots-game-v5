@@ -323,7 +323,16 @@ function TwoDotsGame() {
   // Async provider detection with preference: 'auto' tries Farcaster then EVM, 'farcaster' only Farcaster, 'evm' only EVM
   const getEthProviderAsync = async () => {
     try {
-      const sdk = window.__farcasterMiniappSDK;
+      const sdk = (
+        window.__farcasterMiniappSDK ||
+        window.farcaster ||
+        window.Farcaster ||
+        window.warpcast ||
+        window.Warpcast ||
+        window.fc ||
+        window.sdk ||
+        null
+      );
       let provider = null;
       let kind = null;
       const pref = providerPreferred; // runtime preference
