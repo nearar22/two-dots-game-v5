@@ -153,7 +153,24 @@ function TwoDotsGame() {
       const savedKey = localStorage.getItem('twodots_debug_key');
       if (savedKey && savedKey === expected) setDebugEnabled(true);
     }
+    // Provider preference via query/localStorage
+    try {
+      const prefParam = (params.get('provider') || '').toLowerCase();
+      const valid = prefParam === 'farcaster' || prefParam === 'evm' || prefParam === 'auto';
+      const savedPref = (localStorage.getItem('twodots_provider_pref') || '').toLowerCase();
+      if (valid) {
+        setProviderPreferred(prefParam);
+        localStorage.setItem('twodots_provider_pref', prefParam);
+      } else if (savedPref === 'farcaster' || savedPref === 'evm' || savedPref === 'auto') {
+        setProviderPreferred(savedPref);
+      }
+    } catch {}
   }, []);
+
+  // Persist provider preference changes
+  useEffect(() => {
+    try { localStorage.setItem('twodots_provider_pref', providerPreferred); } catch {}
+  }, [providerPreferred]);
 
   // Load dev wallet from farcaster.json manifest for recipient address
   useEffect(() => {
@@ -210,6 +227,11 @@ function TwoDotsGame() {
       setPaymentStatus('');
       const { provider: eth, kind } = await getEthProviderAsync();
       if (kind) setProviderKind(kind);
+      // Strict guard: if Farcaster-only selected, block EVM fallback
+      if (providerPreferred === 'farcaster' && kind !== 'farcaster') {
+        setPaymentStatus('⚠️ Farcaster-only selected. No Farcaster provider found. Open in Warpcast.');
+        return;
+      }
       if (!eth) {
         setPaymentStatus('⚠️ No wallet provider found. Install MetaMask or use Farcaster Miniapp.');
         return;
