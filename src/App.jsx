@@ -1445,6 +1445,11 @@ function TwoDotsGame() {
                         ▶️ Play Game
                       </button>
                     </div>
+                    {!isDevWalletConfigured() && (
+                      <div className="text-sm text-red-600 mt-2">
+                        خصّك تضبط <span className="font-mono">VITE_DEV_WALLET</span> فـ <span className="font-mono">.env</span> باش يتفعّل زر Play.
+                      </div>
+                    )}
                     <button onClick={() => setShowHowTo(v => !v)} className="w-full bg-gray-100 text-gray-800 font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all border">📘 How to Play</button>
                   </div>
                   {showHowTo && (
