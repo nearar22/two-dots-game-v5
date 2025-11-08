@@ -1,3 +1,27 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Prevent scroll and lock the viewport for mobile webviews */
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Avoid bounce/overscroll inside Farcaster/Base app webview */
+body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
+}
+
+/* Dynamic viewport height with safe-area support (fallbacks included) */
+.app-viewport {
+  min-height: 100vh;   /* fallback */
+  min-height: 100svh;  /* small viewport units for mobile */
+  min-height: 100dvh;  /* dynamic viewport units */
+  overflow: hidden;    /* prevent page scrolling */
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-top: env(safe-area-inset-top);
+}

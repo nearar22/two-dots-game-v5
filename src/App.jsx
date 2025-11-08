@@ -864,7 +864,7 @@ function TwoDotsGame() {
   }, [gameMode]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-2 sm:p-4">
+    <div className="app-viewport flex flex-col items-center justify-center bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-2 sm:p-4">
       <style>{`
         @keyframes rainbow { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
         @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.5) rotate(180deg); } 100% { transform: scale(0); opacity: 0; } }
@@ -874,7 +874,7 @@ function TwoDotsGame() {
         @keyframes leadFlash { 0%, 100% { transform: scale(1); box-shadow: 0 0 0px rgba(34,197,94,0); } 50% { transform: scale(1.05); box-shadow: 0 0 18px rgba(34,197,94,0.7); } }
         @keyframes toastUp { 0% { transform: translate(-50%, -50%) translateY(0) scale(0.95); opacity: 0; } 10% { opacity: 1; } 100% { transform: translate(-50%, -50%) translateY(-40px) scale(1.08); opacity: 0; } }
         * { -webkit-tap-highlight-color: transparent; outline: none !important; }
-        html, body { overscroll-behavior: contain; }
+        html, body { overscroll-behavior: none; }
         @media (max-width: 640px) {
           .game-container { padding: 1rem; }
           .stats-grid { grid-template-columns: repeat(2, 1fr); }
