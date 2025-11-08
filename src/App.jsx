@@ -215,10 +215,11 @@ function TwoDotsGame() {
           sdk.actions.ready();
           // Optional: expose for debugging/inspection
           window.__farcasterMiniappSDK = sdk;
-          // Default to Farcaster preference only when truly inside Warpcast
+          // Inside Warpcast, enforce Farcaster preference regardless of previous local choice
           try {
             if (isWarpcastEnv()) {
-              setProviderPreferred((prev) => (prev === 'auto' ? 'farcaster' : prev));
+              setProviderPreferred('farcaster');
+              try { localStorage.setItem('twodots_provider_pref', 'farcaster'); } catch {}
             }
           } catch {}
           // Try to extract FID safely
@@ -245,12 +246,6 @@ function TwoDotsGame() {
   // Connect wallet via Farcaster or window.ethereum
   const connectWallet = async () => {
     try {
-      // If user forced Farcaster but we’re not in Warpcast, allow EVM fallback
-      try {
-        if (providerPreferred === 'farcaster' && !isWarpcastEnv()) {
-          setProviderPreferred('auto');
-        }
-      } catch {}
       setIsConnecting(true);
       setPaymentStatus('');
       const { provider: eth, kind } = await getEthProviderAsync();
@@ -267,6 +262,13 @@ function TwoDotsGame() {
       const accounts = await eth.request({ method: 'eth_requestAccounts' });
       if (accounts && accounts.length > 0) {
         setWalletAddress(accounts[0]);
+      }
+      // Fallback for providers that only support eth_accounts
+      if (!walletAddress) {
+        try {
+          const acc2 = await eth.request({ method: 'eth_accounts' }) || [];
+          if (acc2 && acc2.length > 0) setWalletAddress(acc2[0]);
+        } catch {}
       }
       // Try read FID if available (safe types)
       try {
@@ -351,6 +353,7 @@ function TwoDotsGame() {
   // Async provider detection with preference: 'auto' tries Farcaster then EVM, 'farcaster' only Farcaster, 'evm' only EVM
   const getEthProviderAsync = async () => {
     try {
+      const insideWarpcast = isWarpcastEnv();
       const sdk = (
         window.__farcasterMiniappSDK ||
         window.farcaster ||
@@ -363,7 +366,7 @@ function TwoDotsGame() {
       );
       let provider = null;
       let kind = null;
-      const pref = providerPreferred; // runtime preference
+      const pref = insideWarpcast ? 'farcaster' : providerPreferred; // force Farcaster inside Warpcast
       // If user prefers EVM, skip Farcaster and wait for window.ethereum
       if (pref === 'evm') {
         const p = await waitForEthereum();
@@ -396,7 +399,7 @@ function TwoDotsGame() {
         } catch {}
       }
       // If explicitly preferring Farcaster, do not fall back to window.ethereum
-      if (!provider && pref === 'farcaster') {
+      if (!provider && (pref === 'farcaster' || insideWarpcast)) {
         return { provider: null, kind: null };
       }
       // Otherwise (auto), fall back to window.ethereum
