@@ -646,20 +646,27 @@ function TwoDotsGame() {
     setGrid(newGrid);
   };
 
-  // Calculate responsive dot size based on container width and grid size
+  // Calculate responsive dot size based on available width AND height
   const getDotSize = (gs = gridSize) => {
-    const isMobile = window.innerWidth < 640;
-    const containerEl = document.querySelector('.game-container');
     const cardMaxWidth = 768; // Tailwind max-w-3xl ≈ 768px
-    const containerWidth = containerEl?.clientWidth || Math.min(window.innerWidth, cardMaxWidth);
+    const gridViewportEl = document.querySelector('.grid-viewport');
+    const containerEl = document.querySelector('.game-container');
+    const isMobile = window.innerWidth < 640;
     const gridGap = isMobile ? 8 : 8; // approximate gap-1/sm:gap-2
-    const padding = isMobile ? 16 : 24; // approximate p-3/sm:p-6
-    const available = containerWidth - padding * 0; // padding already inside card width
-    const size = Math.floor((available - gridGap * (gs - 1)) / gs);
-    return Math.max(28, Math.min(size, 60));
+
+    const containerWidth = containerEl?.clientWidth || Math.min(window.innerWidth, cardMaxWidth);
+    const availWidth = gridViewportEl?.clientWidth || containerWidth;
+    const availHeight = gridViewportEl?.clientHeight || Math.max(320, Math.floor(window.innerHeight * 0.5));
+
+    const sizeByWidth = Math.floor((availWidth - gridGap * (gs - 1)) / gs);
+    const sizeByHeight = Math.floor((availHeight - gridGap * (gs - 1)) / gs);
+
+    const size = Math.min(sizeByWidth, sizeByHeight, 64);
+    return Math.max(24, size);
   };
 
   const [dotSize, setDotSize] = useState(getDotSize(gridSize));
+  const gridRef = useRef(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -670,6 +677,32 @@ function TwoDotsGame() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [gridSize]);
+
+  // Recompute dotSize whenever the grid viewport resizes
+  useEffect(() => {
+    const el = document.querySelector('.grid-viewport');
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setDotSize(getDotSize(gridSize)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [gridSize]);
+
+  // Fallback: derive grid cell by pointer coordinates if elementFromPoint fails
+  const getGridCellFromPoint = (clientX, clientY) => {
+    const el = gridRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    if (x < 0 || y < 0 || x > rect.width || y > rect.height) return null;
+    const isMobile = window.innerWidth < 640;
+    const gridGap = isMobile ? 8 : 8;
+    const cellSpan = dotSize + gridGap;
+    const col = Math.floor(x / cellSpan);
+    const row = Math.floor(y / cellSpan);
+    if (row < 0 || col < 0 || row >= gridSize || col >= gridSize) return null;
+    return { row, col };
+  };
 
   // Robo plays periodically (Robo & Robo Timed). Faster with higher speedLevel in Robo Timed.
   useEffect(() => {
@@ -1099,8 +1132,8 @@ function TwoDotsGame() {
         )}
         </>
 
-        <div className="relative mb-4 flex justify-center">
-          <div className="grid gap-1 sm:gap-2 relative" style={{ gridTemplateColumns: `repeat(${gridSize}, ${dotSize}px)`, touchAction: 'none', overscrollBehavior: 'contain' }} onMouseUp={handleMouseUp} onMouseLeave={handleMouseLeave} onWheel={(e) => e.preventDefault()} onTouchEnd={() => { setIsDragging(false); completePath(); }} onTouchCancel={() => { setIsDragging(false); completePath(); }}>
+        <div className="grid-viewport relative flex justify-center items-center">
+          <div ref={gridRef} className="grid gap-1 sm:gap-2 relative" style={{ gridTemplateColumns: `repeat(${gridSize}, ${dotSize}px)`, gridTemplateRows: `repeat(${gridSize}, ${dotSize}px)`, touchAction: 'none', overscrollBehavior: 'contain' }} onMouseUp={handleMouseUp} onMouseLeave={handleMouseLeave} onWheel={(e) => e.preventDefault()} onTouchEnd={() => { setIsDragging(false); completePath(); }} onTouchCancel={() => { setIsDragging(false); completePath(); }}>
             {grid.map((row, rowIndex) =>
               row.map((dot, colIndex) => {
                 if (!dot) return <div key={`${rowIndex}-${colIndex}`} style={{width: `${dotSize}px`, height: `${dotSize}px`}} />;
@@ -1178,14 +1211,17 @@ function TwoDotsGame() {
                     onTouchMove={(e) => {
                       e.preventDefault();
                       const touch = e.touches[0];
-                      const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                      let element = document.elementFromPoint(touch.clientX, touch.clientY);
                       if (element && element.hasAttribute('data-row') && element.hasAttribute('data-col')) {
                         const row = parseInt(element.getAttribute('data-row'));
                         const col = parseInt(element.getAttribute('data-col'));
                         if (!isNaN(row) && !isNaN(col)) {
                           handleDotClick(row, col);
+                          return;
                         }
                       }
+                      const cell = getGridCellFromPoint(touch.clientX, touch.clientY);
+                      if (cell) handleDotClick(cell.row, cell.col);
                     }}>
                     {isSelected && <div className="w-full h-full flex items-center justify-center text-white font-bold text-xl" style={{textShadow: '0 0 10px rgba(0,0,0,0.5)'}}>{selectedDots.findIndex(d => d.row === rowIndex && d.col === colIndex) + 1}</div>}
                     {dot.isGem && !isSelected && <div className="w-full h-full flex items-center justify-center text-2xl">💎</div>}
