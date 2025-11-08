@@ -60,6 +60,7 @@ function TwoDotsGame() {
   const [txHash, setTxHash] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState('');
   const [providerKind, setProviderKind] = useState(null); // 'farcaster' | 'evm' | null
+  const [providerDebug, setProviderDebug] = useState('');
   const PROVIDER_LOCK = (import.meta.env.VITE_PROVIDER_LOCK || '').toLowerCase(); // 'farcaster' | 'evm' | ''
   const [providerPreferred, setProviderPreferred] = useState(
     PROVIDER_LOCK === 'evm' ? 'evm' : (PROVIDER_LOCK === 'farcaster' ? 'farcaster' : 'auto')
@@ -348,6 +349,7 @@ function TwoDotsGame() {
   // Async provider detection with preference: 'auto' tries Farcaster then EVM, 'farcaster' only Farcaster, 'evm' only EVM
   const getEthProviderAsync = async () => {
     try {
+      let dbg = [];
       const sdk = (
         window.__farcasterMiniappSDK ||
         window.farcaster ||
@@ -358,6 +360,10 @@ function TwoDotsGame() {
         window.sdk ||
         null
       );
+      dbg.push(`sdk:${sdk ? 'yes' : 'no'}`);
+      dbg.push(`connect:${typeof sdk?.wallet?.connect}`);
+      dbg.push(`reqProv:${typeof sdk?.wallet?.requestEthereumProvider}`);
+      dbg.push(`getProv:${typeof sdk?.wallet?.getEthereumProvider}`);
       let provider = null;
       let kind = null;
       const pref = providerPreferred;
@@ -376,6 +382,7 @@ function TwoDotsGame() {
       for (const p of direct) {
         if (p && typeof p.request === 'function') { provider = p; kind = 'farcaster'; break; }
       }
+      dbg.push(`direct:${provider ? 'ok' : 'none'}`);
       if (!provider) {
         try {
           if (typeof sdk?.wallet?.requestEthereumProvider === 'function') {
@@ -384,6 +391,7 @@ function TwoDotsGame() {
           }
         } catch {}
       }
+      dbg.push(`reqAfter:${provider ? 'ok' : 'none'}`);
       if (!provider) {
         try {
           if (typeof sdk?.wallet?.connect === 'function') {
@@ -407,8 +415,10 @@ function TwoDotsGame() {
           }
         } catch {}
       }
+      dbg.push(`afterConnect:${provider ? 'ok' : 'none'}`);
       // If explicitly preferring Farcaster, do not fall back to window.ethereum
       if (!provider && (pref === 'farcaster')) {
+        setProviderDebug(dbg.join(' | '));
         return { provider: null, kind: null };
       }
       // Otherwise (auto), fall back to window.ethereum
@@ -416,8 +426,10 @@ function TwoDotsGame() {
         const p = await waitForEthereum();
         if (p && typeof p.request === 'function') { provider = p; kind = 'evm'; }
       }
+      setProviderDebug(dbg.join(' | '));
       return { provider: provider || null, kind };
     } catch {
+      setProviderDebug('error:getEthProviderAsync');
       return { provider: null, kind: null };
     }
   };
@@ -1684,6 +1696,9 @@ function TwoDotsGame() {
                     </div>
                     {providerKind && (
                       <div className="text-xs text-gray-600 text-center">Provider: {providerKind === 'farcaster' ? 'Farcaster' : 'EVM'}</div>
+                    )}
+                    {providerDebug && (
+                      <div className="text-[10px] text-gray-500 text-center break-words">{providerDebug}</div>
                     )}
                     {paymentStatus && (
                       <div className="text-xs text-center px-3 py-2 rounded-lg border mt-1"
