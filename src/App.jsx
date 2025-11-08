@@ -60,11 +60,16 @@ function TwoDotsGame() {
   const [txHash, setTxHash] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState('');
 
-  const DEV_WALLET = import.meta.env.VITE_DEV_WALLET || '0xYourDevWalletHere';
+  const DEV_WALLET_ENV = import.meta.env.VITE_DEV_WALLET || '0xYourDevWalletHere';
+  const [manifestDevWallet, setManifestDevWallet] = useState(null);
   const WEI_0_00001_ETH = 10000000000000n; // 0.00001 ETH in wei
   const shortAddr = (addr) => addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '';
-  const isDevWalletConfigured = () => DEV_WALLET && DEV_WALLET.startsWith('0x') && DEV_WALLET.length === 42 && !DEV_WALLET.includes('YourDevWallet');
-  const getPaymentRecipient = () => (isDevWalletConfigured() ? DEV_WALLET : walletAddress);
+  const effectiveDevWallet = () => {
+    const v = (manifestDevWallet && manifestDevWallet.startsWith('0x') && manifestDevWallet.length === 42) ? manifestDevWallet : null;
+    const e = (DEV_WALLET_ENV && DEV_WALLET_ENV.startsWith('0x') && DEV_WALLET_ENV.length === 42 && !DEV_WALLET_ENV.includes('YourDevWallet')) ? DEV_WALLET_ENV : null;
+    return v || e || null;
+  };
+  const getPaymentRecipient = () => effectiveDevWallet();
   // Lock winner synchronously to avoid race conditions between player and robo updates
   const duelLockedRef = useRef(null); // 'player' | 'robo' | null
   // Attempt to lock winner deterministically for PvP Score race
@@ -143,6 +148,23 @@ function TwoDotsGame() {
       const savedKey = localStorage.getItem('twodots_debug_key');
       if (savedKey && savedKey === expected) setDebugEnabled(true);
     }
+  }, []);
+
+  // Load dev wallet from farcaster.json manifest for recipient address
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/.well-known/farcaster.json', { cache: 'no-store' });
+        if (!res.ok) return;
+        const json = await res.json();
+        const addr = json?.baseBuilder?.ownerAddress;
+        if (typeof addr === 'string' && addr.startsWith('0x') && addr.length === 42) {
+          setManifestDevWallet(addr);
+        }
+      } catch (e) {
+        // ignore fetch errors; env var may be used instead
+      }
+    })();
   }, []);
 
   // Farcaster Miniapp SDK: import dynamically and signal readiness
@@ -274,7 +296,7 @@ function TwoDotsGame() {
       const valueHex = '0x' + WEI_0_00001_ETH.toString(16);
       const toAddr = getPaymentRecipient();
       if (!toAddr) {
-        setPaymentStatus('❌ No recipient address available.');
+        setPaymentStatus('❌ Recipient not configured. Please set VITE_DEV_WALLET or farcaster.json baseBuilder.ownerAddress.');
         return;
       }
       setTxPending(true);
@@ -1478,7 +1500,7 @@ function TwoDotsGame() {
                       <button onClick={connectWallet} disabled={isConnecting} className={`w-full ${walletAddress? 'bg-green-600 hover:bg-green-700 text-white':'bg-blue-600 hover:bg-blue-700 text-white'} font-bold py-3 px-6 rounded-xl transition-all`}>
                         {walletAddress ? `✅ Connected: ${shortAddr(walletAddress)}` : (isConnecting ? '⏳ Connecting…' : '🔗 Connect Wallet')}
                       </button>
-                      <button onClick={payAndStartGame} disabled={!walletAddress || txPending} className={`w-full ${(!walletAddress || txPending) ? 'bg-gray-400 cursor-not-allowed':'bg-gradient-to-r from-purple-600 to-pink-600'} text-white font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all shadow-lg`}>
+                      <button onClick={payAndStartGame} disabled={!walletAddress || txPending || !effectiveDevWallet()} className={`w-full ${(!walletAddress || txPending || !effectiveDevWallet()) ? 'bg-gray-400 cursor-not-allowed':'bg-gradient-to-r from-purple-600 to-pink-600'} text-white font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all shadow-lg`}>
                         ▶️ Play Game
                       </button>
                     </div>
