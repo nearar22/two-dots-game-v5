@@ -1645,6 +1645,17 @@ function TwoDotsGame() {
                     {providerKind && (
                       <div className="text-xs text-gray-600 text-center">Provider: {providerKind === 'farcaster' ? 'Farcaster' : 'EVM'}</div>
                     )}
+                    {paymentStatus && (
+                      <div className="text-xs text-center px-3 py-2 rounded-lg border mt-1"
+                           style={{
+                             background: paymentStatus.startsWith('✅') ? '#e8f5e9' : paymentStatus.startsWith('❌') ? '#ffebee' : '#fff8e1',
+                             color: paymentStatus.startsWith('✅') ? '#1b5e20' : paymentStatus.startsWith('❌') ? '#b71c1c' : '#8d6e63',
+                             borderColor: paymentStatus.startsWith('✅') ? '#a5d6a7' : paymentStatus.startsWith('❌') ? '#ef9a9a' : '#ffe082'
+                           }}
+                           aria-live="polite">
+                        {paymentStatus}
+                      </div>
+                    )}
                     {debugEnabled && (
                       <div className="flex justify-center gap-2 mt-1">
                         <button
