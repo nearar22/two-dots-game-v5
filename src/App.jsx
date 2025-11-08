@@ -75,6 +75,22 @@ function TwoDotsGame() {
     return v || e || null;
   };
   const getPaymentRecipient = () => effectiveDevWallet();
+  // Detect Warpcast environment to avoid forcing Farcaster on normal browsers
+  const isWarpcastEnv = () => {
+    try {
+      const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
+      if (/warpcast/i.test(ua)) return true;
+      const sdk = (
+        window.__farcasterMiniappSDK ||
+        window.warpcast || window.Warpcast ||
+        window.farcaster || window.Farcaster ||
+        window.fc || window.sdk || null
+      );
+      const client = (sdk?.context?.client || sdk?.environment?.platform || '') + '';
+      if (/warpcast/i.test(client)) return true;
+    } catch {}
+    return false;
+  };
   // Lock winner synchronously to avoid race conditions between player and robo updates
   const duelLockedRef = useRef(null); // 'player' | 'robo' | null
   // Attempt to lock winner deterministically for PvP Score race
@@ -199,8 +215,12 @@ function TwoDotsGame() {
           sdk.actions.ready();
           // Optional: expose for debugging/inspection
           window.__farcasterMiniappSDK = sdk;
-          // Default to Farcaster preference inside Warpcast if user hasn't chosen yet
-          try { setProviderPreferred((prev) => (prev === 'auto' ? 'farcaster' : prev)); } catch {}
+          // Default to Farcaster preference only when truly inside Warpcast
+          try {
+            if (isWarpcastEnv()) {
+              setProviderPreferred((prev) => (prev === 'auto' ? 'farcaster' : prev));
+            }
+          } catch {}
           // Try to extract FID safely
           const tryGetFid = async () => {
             try {
@@ -225,6 +245,12 @@ function TwoDotsGame() {
   // Connect wallet via Farcaster or window.ethereum
   const connectWallet = async () => {
     try {
+      // If user forced Farcaster but we’re not in Warpcast, allow EVM fallback
+      try {
+        if (providerPreferred === 'farcaster' && !isWarpcastEnv()) {
+          setProviderPreferred('auto');
+        }
+      } catch {}
       setIsConnecting(true);
       setPaymentStatus('');
       const { provider: eth, kind } = await getEthProviderAsync();
