@@ -203,9 +203,7 @@ function TwoDotsGame() {
     try {
       setIsConnecting(true);
       setPaymentStatus('');
-      const sdk = window.__farcasterMiniappSDK;
-      // Prefer Farcaster SDK provider; fallback to window.ethereum if absent
-      const eth = (sdk?.wallet?.getEthereumProvider?.() || sdk?.ethereum || sdk?.wallet?.ethereum || window.ethereum || null);
+      const eth = getEthProvider();
       if (!eth) {
         setPaymentStatus('⚠️ No wallet provider found. Install MetaMask or use Farcaster Miniapp.');
         return;
@@ -216,6 +214,7 @@ function TwoDotsGame() {
       }
       // Try read FID if available (safe types)
       try {
+        const sdk = window.__farcasterMiniappSDK;
         if (typeof sdk?.actions?.getFid === 'function') {
           const f = await sdk.actions.getFid();
           if (typeof f === 'number' || typeof f === 'string') setFid(f);
@@ -246,6 +245,25 @@ function TwoDotsGame() {
     return null;
   };
 
+  // Robust provider detection: prefer Farcaster SDK provider, fall back to window.ethereum
+  const getEthProvider = () => {
+    try {
+      const sdk = window.__farcasterMiniappSDK;
+      const candidates = [
+        typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null,
+        sdk?.ethereum || null,
+        sdk?.wallet?.ethereum || null,
+        typeof window !== 'undefined' ? window.ethereum : null
+      ];
+      for (const p of candidates) {
+        if (p && typeof p.request === 'function') return p;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
   const payAndStartGame = async () => {
     try {
       setPaymentStatus('');
@@ -253,9 +271,7 @@ function TwoDotsGame() {
         await connectWallet();
         if (!walletAddress) return;
       }
-      const sdk = window.__farcasterMiniappSDK;
-      // Prefer Farcaster SDK provider; fallback to window.ethereum if absent
-      const eth = (sdk?.wallet?.getEthereumProvider?.() || sdk?.ethereum || sdk?.wallet?.ethereum || window.ethereum || null);
+      const eth = getEthProvider();
       if (!eth) {
         setPaymentStatus('⚠️ No wallet provider found.');
         return;
