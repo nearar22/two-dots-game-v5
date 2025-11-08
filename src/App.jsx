@@ -939,7 +939,7 @@ function TwoDotsGame() {
         )}
         {/* Game Logo */}
         <div className="flex justify-center mb-1">
-          <svg width="120" height="48" viewBox="0 0 120 48" role="img" aria-label="Two Dots logo" style={{ filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.15))', animation: 'pulse 3s infinite' }}>
+          <svg width="96" height="40" viewBox="0 0 120 48" role="img" aria-label="Two Dots logo" style={{ filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.12))', animation: 'pulse 3s infinite' }}>
             <defs>
               <linearGradient id="dotA" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#FF6B6B" />
@@ -955,7 +955,7 @@ function TwoDotsGame() {
           </svg>
         </div>
 
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-center mb-2 sm:mb-4 bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent" style={{animation: 'pulse 3s infinite'}}>
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center leading-tight mb-1 sm:mb-2 bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent" style={{animation: 'pulse 3s infinite'}}>
           Two Dots ✨
         </h1>
         {/* Open Menu button */}
