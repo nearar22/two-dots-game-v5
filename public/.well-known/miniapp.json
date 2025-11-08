@@ -1,0 +1,34 @@
+{
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "baseBuilder": {
+    "ownerAddress": "0x1dA0Cc5e658EaE389E88Db2E1Bc009EC0B859883"
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "Two Dots",
+    "homeUrl": "https://YOUR_VERCEL_DOMAIN/",
+    "iconUrl": "https://YOUR_VERCEL_DOMAIN/icon.png",
+    "splashImageUrl": "https://YOUR_VERCEL_DOMAIN/splash.png",
+    "splashBackgroundColor": "#000000",
+    "webhookUrl": "https://YOUR_VERCEL_DOMAIN/api/webhook",
+    "subtitle": "Fast, fun, social",
+    "description": "A fast, fun way to play Two Dots with friends.",
+    "screenshotUrls": [
+      "https://YOUR_VERCEL_DOMAIN/s1.png",
+      "https://YOUR_VERCEL_DOMAIN/s2.png",
+      "https://YOUR_VERCEL_DOMAIN/s3.png"
+    ],
+    "primaryCategory": "social",
+    "tags": ["twodots", "miniapp", "baseapp"],
+    "heroImageUrl": "https://YOUR_VERCEL_DOMAIN/og.png",
+    "tagline": "Play instantly",
+    "ogTitle": "Two Dots",
+    "ogDescription": "Connect dots, compete, and have fun.",
+    "ogImageUrl": "https://YOUR_VERCEL_DOMAIN/og.png",
+    "noindex": true
+  }
+}
