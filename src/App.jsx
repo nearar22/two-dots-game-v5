@@ -203,7 +203,7 @@ function TwoDotsGame() {
     try {
       setIsConnecting(true);
       setPaymentStatus('');
-      const eth = getEthProvider();
+      const eth = await getEthProviderAsync();
       if (!eth) {
         setPaymentStatus('⚠️ No wallet provider found. Install MetaMask or use Farcaster Miniapp.');
         return;
@@ -264,6 +264,74 @@ function TwoDotsGame() {
     }
   };
 
+  // Wait for window.ethereum initialization when injection is delayed
+  const waitForEthereum = (timeoutMs = 2500) => new Promise((resolve) => {
+    try {
+      if (typeof window !== 'undefined' && window.ethereum && typeof window.ethereum.request === 'function') {
+        resolve(window.ethereum);
+        return;
+      }
+      let settled = false;
+      const onInit = () => {
+        if (settled) return;
+        settled = true;
+        resolve(window.ethereum || null);
+      };
+      if (typeof window !== 'undefined') {
+        window.addEventListener('ethereum#initialized', onInit, { once: true });
+        setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          resolve(window.ethereum || null);
+        }, timeoutMs);
+      } else {
+        resolve(null);
+      }
+    } catch {
+      resolve(null);
+    }
+  });
+
+  // Async provider detection: prefer Farcaster SDK provider, request via SDK if needed, then fall back to window.ethereum
+  const getEthProviderAsync = async () => {
+    try {
+      const sdk = window.__farcasterMiniappSDK;
+      let provider = null;
+      const direct = [
+        typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null,
+        sdk?.ethereum || null,
+        sdk?.wallet?.ethereum || null
+      ];
+      for (const p of direct) {
+        if (p && typeof p.request === 'function') { provider = p; break; }
+      }
+      if (!provider) {
+        try {
+          if (typeof sdk?.wallet?.requestEthereumProvider === 'function') {
+            const p = await sdk.wallet.requestEthereumProvider();
+            if (p && typeof p.request === 'function') provider = p;
+          }
+        } catch {}
+      }
+      if (!provider) {
+        try {
+          if (typeof sdk?.wallet?.connect === 'function') {
+            await sdk.wallet.connect();
+            const p = typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null;
+            if (p && typeof p.request === 'function') provider = p;
+          }
+        } catch {}
+      }
+      if (!provider) {
+        const p = await waitForEthereum();
+        if (p && typeof p.request === 'function') provider = p;
+      }
+      return provider || null;
+    } catch {
+      return null;
+    }
+  };
+
   const payAndStartGame = async () => {
     try {
       setPaymentStatus('');
@@ -271,7 +339,7 @@ function TwoDotsGame() {
         await connectWallet();
         if (!walletAddress) return;
       }
-      const eth = getEthProvider();
+      const eth = await getEthProviderAsync();
       if (!eth) {
         setPaymentStatus('⚠️ No wallet provider found.');
         return;
