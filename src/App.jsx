@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { sdk as fcSdk } from '@farcaster/miniapp-sdk';
 import { Bomb, Shuffle, Plus, Star, Trophy, Zap } from 'lucide-react';
 
 const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8'];
@@ -206,42 +207,29 @@ function TwoDotsGame() {
     })();
   }, []);
 
-  // Farcaster Miniapp SDK: import dynamically and signal readiness
+  // Farcaster Miniapp SDK: static import and awaited ready per docs
   useEffect(() => {
     (async () => {
       try {
-        let sdk = (
-          window.warpcast || window.Warpcast ||
-          window.farcaster || window.Farcaster ||
-          window.fc || window.sdk || null
-        );
-        if (!sdk) {
-          const mod = await import('https://esm.sh/@farcaster/miniapp-sdk');
-          sdk = mod?.sdk ?? mod?.default ?? mod;
+        // Expose for any existing references
+        window.__farcasterMiniappSDK = fcSdk;
+        if (typeof fcSdk?.actions?.ready === 'function') {
+          await fcSdk.actions.ready();
         }
-        if (sdk) {
-          if (typeof sdk?.actions?.ready === 'function') {
-            try { sdk.actions.ready(); } catch {}
+        // Try to extract FID safely
+        try {
+          if (typeof fcSdk?.actions?.getFid === 'function') {
+            const f = await fcSdk.actions.getFid();
+            if (typeof f === 'number' || typeof f === 'string') { setFid(f); }
+          } else {
+            const fields = [fcSdk?.user?.fid, fcSdk?.context?.fid, fcSdk?.state?.user?.fid];
+            for (const val of fields) {
+              if (typeof val === 'number' || typeof val === 'string') { setFid(val); break; }
+            }
           }
-          window.__farcasterMiniappSDK = sdk;
-          // Do not override provider preference automatically inside Warpcast
-          // Try to extract FID safely
-          const tryGetFid = async () => {
-            try {
-              if (typeof sdk?.actions?.getFid === 'function') {
-                const f = await sdk.actions.getFid();
-                if (typeof f === 'number' || typeof f === 'string') { setFid(f); return; }
-              }
-              const fields = [sdk?.user?.fid, sdk?.context?.fid, sdk?.state?.user?.fid];
-              for (const val of fields) {
-                if (typeof val === 'number' || typeof val === 'string') { setFid(val); return; }
-              }
-            } catch {}
-          };
-          tryGetFid();
-        }
+        } catch {}
       } catch (err) {
-        console.warn('Farcaster Miniapp SDK load/ready failed:', err);
+        console.warn('Farcaster Miniapp SDK ready failed:', err);
       }
     })();
   }, []);
@@ -268,12 +256,11 @@ function TwoDotsGame() {
       }
       // Try read FID if available (safe types)
       try {
-        const sdk = window.__farcasterMiniappSDK;
-        if (typeof sdk?.actions?.getFid === 'function') {
-          const f = await sdk.actions.getFid();
+        if (typeof fcSdk?.actions?.getFid === 'function') {
+          const f = await fcSdk.actions.getFid();
           if (typeof f === 'number' || typeof f === 'string') setFid(f);
         } else {
-          const fields = [sdk?.user?.fid, sdk?.context?.fid, sdk?.state?.user?.fid];
+          const fields = [fcSdk?.user?.fid, fcSdk?.context?.fid, fcSdk?.state?.user?.fid];
           for (const val of fields) {
             if (typeof val === 'number' || typeof val === 'string') { setFid(val); break; }
           }
@@ -302,7 +289,7 @@ function TwoDotsGame() {
   // Robust provider detection: prefer Farcaster SDK provider, fall back to window.ethereum
   const getEthProvider = () => {
     try {
-      const sdk = window.__farcasterMiniappSDK;
+      const sdk = fcSdk || window.__farcasterMiniappSDK || null;
       const candidates = [
         typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null,
         sdk?.ethereum || null,
@@ -350,18 +337,8 @@ function TwoDotsGame() {
   const getEthProviderAsync = async () => {
     try {
       let dbg = [];
-      const sdk = (
-        window.__farcasterMiniappSDK ||
-        window.farcaster ||
-        window.Farcaster ||
-        window.warpcast ||
-        window.Warpcast ||
-        window.fc ||
-        window.sdk ||
-        null
-      );
+      const sdk = fcSdk || window.__farcasterMiniappSDK || window.sdk || null;
       dbg.push(`sdk:${sdk ? 'yes' : 'no'}`);
-      dbg.push(`connect:${typeof sdk?.wallet?.connect}`);
       dbg.push(`reqProv:${typeof sdk?.wallet?.requestEthereumProvider}`);
       dbg.push(`getProv:${typeof sdk?.wallet?.getEthereumProvider}`);
       let provider = null;
@@ -392,30 +369,8 @@ function TwoDotsGame() {
         } catch {}
       }
       dbg.push(`reqAfter:${provider ? 'ok' : 'none'}`);
-      if (!provider) {
-        try {
-          if (typeof sdk?.wallet?.connect === 'function') {
-            // Try hex first, then numeric (some SDK builds accept one form only)
-            try { await sdk.wallet.connect({ chainId: '0x2105' }); } catch {}
-            try {
-              const p1 = typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null;
-              if (p1 && typeof p1.request === 'function') { provider = p1; kind = 'farcaster'; }
-            } catch {}
-            if (!provider) {
-              try { await sdk.wallet.connect({ chainId: 8453 }); } catch {}
-              try {
-                const p2 = typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null;
-                if (p2 && typeof p2.request === 'function') { provider = p2; kind = 'farcaster'; }
-              } catch {}
-            }
-            if (!provider && typeof sdk?.wallet?.requestEthereumProvider === 'function') {
-              const rp = await sdk.wallet.requestEthereumProvider();
-              if (rp && typeof rp.request === 'function') { provider = rp; kind = 'farcaster'; }
-            }
-          }
-        } catch {}
-      }
-      dbg.push(`afterConnect:${provider ? 'ok' : 'none'}`);
+      // Do not use connect() here per minimal docs guidance
+      dbg.push(`afterConnect:none`);
       // If explicitly preferring Farcaster, do not fall back to window.ethereum
       if (!provider && (pref === 'farcaster')) {
         setProviderDebug(dbg.join(' | '));
