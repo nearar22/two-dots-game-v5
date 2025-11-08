@@ -199,6 +199,8 @@ function TwoDotsGame() {
           sdk.actions.ready();
           // Optional: expose for debugging/inspection
           window.__farcasterMiniappSDK = sdk;
+          // Default to Farcaster preference inside Warpcast if user hasn't chosen yet
+          try { setProviderPreferred((prev) => (prev === 'auto' ? 'farcaster' : prev)); } catch {}
           // Try to extract FID safely
           const tryGetFid = async () => {
             try {
@@ -361,7 +363,7 @@ function TwoDotsGame() {
       if (!provider) {
         try {
           if (typeof sdk?.wallet?.connect === 'function') {
-            await sdk.wallet.connect();
+            await sdk.wallet.connect({ chainId: 8453 });
             const p = typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null;
             if (p && typeof p.request === 'function') { provider = p; kind = 'farcaster'; }
           }
