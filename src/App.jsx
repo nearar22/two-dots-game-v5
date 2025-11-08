@@ -416,9 +416,14 @@ function TwoDotsGame() {
       if (!provider) {
         try {
           if (typeof sdk?.wallet?.connect === 'function') {
-            await sdk.wallet.connect({ chainId: 8453 });
+            await sdk.wallet.connect({ chainId: '0x2105' }); // Base mainnet
             const p = typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null;
             if (p && typeof p.request === 'function') { provider = p; kind = 'farcaster'; }
+            // Second attempt: request provider after connect
+            if (!provider && typeof sdk?.wallet?.requestEthereumProvider === 'function') {
+              const rp = await sdk.wallet.requestEthereumProvider();
+              if (rp && typeof rp.request === 'function') { provider = rp; kind = 'farcaster'; }
+            }
           }
         } catch {}
       }
@@ -513,6 +518,16 @@ function TwoDotsGame() {
     } finally {
       setTxPending(false);
     }
+  };
+
+  // Guest mode: start without wallet/payment
+  const startGuestMode = () => {
+    try {
+      setPaymentStatus('🎮 Guest mode: playing without wallet.');
+      setMenuView('select');
+      setShowHowTo(false);
+      setShowMenu(true);
+    } catch {}
   };
 
   useEffect(() => {
@@ -1693,6 +1708,9 @@ function TwoDotsGame() {
                       </button>
                       <button onClick={payAndStartGame} disabled={!walletAddress || txPending || !effectiveDevWallet()} className={`w-full ${(!walletAddress || txPending || !effectiveDevWallet()) ? 'bg-gray-400 cursor-not-allowed':'bg-gradient-to-r from-purple-600 to-pink-600'} text-white font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all shadow-lg`}>
                         ▶️ Play Game
+                      </button>
+                      <button onClick={startGuestMode} className={`w-full bg-gray-100 text-gray-800 font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all border`}>
+                        🎮 Play without wallet
                       </button>
                     </div>
                     {providerKind && (
