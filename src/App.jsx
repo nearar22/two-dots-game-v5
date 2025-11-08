@@ -223,12 +223,7 @@ function TwoDotsGame() {
             try { sdk.actions.ready(); } catch {}
           }
           window.__farcasterMiniappSDK = sdk;
-          // Inside Warpcast, prefer Farcaster only when preference is 'auto'
-          try {
-            if (isWarpcastEnv()) {
-              setProviderPreferred((prev) => (prev === 'auto' ? 'farcaster' : prev));
-            }
-          } catch {}
+          // Do not override provider preference automatically inside Warpcast
           // Try to extract FID safely
           const tryGetFid = async () => {
             try {
@@ -375,7 +370,8 @@ function TwoDotsGame() {
       const direct = [
         typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null,
         sdk?.ethereum || null,
-        sdk?.wallet?.ethereum || null
+        sdk?.wallet?.ethereum || null,
+        sdk?.provider || null
       ];
       for (const p of direct) {
         if (p && typeof p.request === 'function') { provider = p; kind = 'farcaster'; break; }
@@ -391,9 +387,23 @@ function TwoDotsGame() {
       if (!provider) {
         try {
           if (typeof sdk?.wallet?.connect === 'function') {
-            await sdk.wallet.connect({ chainId: 8453 }); // Base mainnet (original numeric)
-            const p = typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null;
-            if (p && typeof p.request === 'function') { provider = p; kind = 'farcaster'; }
+            // Try hex first, then numeric (some SDK builds accept one form only)
+            try { await sdk.wallet.connect({ chainId: '0x2105' }); } catch {}
+            try {
+              const p1 = typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null;
+              if (p1 && typeof p1.request === 'function') { provider = p1; kind = 'farcaster'; }
+            } catch {}
+            if (!provider) {
+              try { await sdk.wallet.connect({ chainId: 8453 }); } catch {}
+              try {
+                const p2 = typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null;
+                if (p2 && typeof p2.request === 'function') { provider = p2; kind = 'farcaster'; }
+              } catch {}
+            }
+            if (!provider && typeof sdk?.wallet?.requestEthereumProvider === 'function') {
+              const rp = await sdk.wallet.requestEthereumProvider();
+              if (rp && typeof rp.request === 'function') { provider = rp; kind = 'farcaster'; }
+            }
           }
         } catch {}
       }
