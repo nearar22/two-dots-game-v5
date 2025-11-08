@@ -59,6 +59,8 @@ function TwoDotsGame() {
   const [txPending, setTxPending] = useState(false);
   const [txHash, setTxHash] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState('');
+  const [providerKind, setProviderKind] = useState(null); // 'farcaster' | 'evm' | null
+  const PROVIDER_LOCK = (import.meta.env.VITE_PROVIDER_LOCK || '').toLowerCase(); // 'farcaster' | 'evm' | ''
 
   const DEV_WALLET_ENV = import.meta.env.VITE_DEV_WALLET || '0xYourDevWalletHere';
   const [manifestDevWallet, setManifestDevWallet] = useState(null);
@@ -203,7 +205,8 @@ function TwoDotsGame() {
     try {
       setIsConnecting(true);
       setPaymentStatus('');
-      const eth = await getEthProviderAsync();
+      const { provider: eth, kind } = await getEthProviderAsync();
+      if (kind) setProviderKind(kind);
       if (!eth) {
         setPaymentStatus('⚠️ No wallet provider found. Install MetaMask or use Farcaster Miniapp.');
         return;
@@ -297,19 +300,26 @@ function TwoDotsGame() {
     try {
       const sdk = window.__farcasterMiniappSDK;
       let provider = null;
+      let kind = null;
+      // If lock set to EVM, skip Farcaster and wait for window.ethereum
+      if (PROVIDER_LOCK === 'evm') {
+        const p = await waitForEthereum();
+        if (p && typeof p.request === 'function') { return { provider: p, kind: 'evm' }; }
+        return { provider: null, kind: null };
+      }
       const direct = [
         typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null,
         sdk?.ethereum || null,
         sdk?.wallet?.ethereum || null
       ];
       for (const p of direct) {
-        if (p && typeof p.request === 'function') { provider = p; break; }
+        if (p && typeof p.request === 'function') { provider = p; kind = 'farcaster'; break; }
       }
       if (!provider) {
         try {
           if (typeof sdk?.wallet?.requestEthereumProvider === 'function') {
             const p = await sdk.wallet.requestEthereumProvider();
-            if (p && typeof p.request === 'function') provider = p;
+            if (p && typeof p.request === 'function') { provider = p; kind = 'farcaster'; }
           }
         } catch {}
       }
@@ -318,17 +328,18 @@ function TwoDotsGame() {
           if (typeof sdk?.wallet?.connect === 'function') {
             await sdk.wallet.connect();
             const p = typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null;
-            if (p && typeof p.request === 'function') provider = p;
+            if (p && typeof p.request === 'function') { provider = p; kind = 'farcaster'; }
           }
         } catch {}
       }
-      if (!provider) {
+      // If lock set to Farcaster, do not fall back to window.ethereum
+      if (!provider && PROVIDER_LOCK !== 'farcaster') {
         const p = await waitForEthereum();
-        if (p && typeof p.request === 'function') provider = p;
+        if (p && typeof p.request === 'function') { provider = p; kind = 'evm'; }
       }
-      return provider || null;
+      return { provider: provider || null, kind };
     } catch {
-      return null;
+      return { provider: null, kind: null };
     }
   };
 
@@ -339,7 +350,8 @@ function TwoDotsGame() {
         await connectWallet();
         if (!walletAddress) return;
       }
-      const eth = await getEthProviderAsync();
+      const { provider: eth, kind } = await getEthProviderAsync();
+      if (kind) setProviderKind(kind);
       if (!eth) {
         setPaymentStatus('⚠️ No wallet provider found.');
         return;
@@ -1589,6 +1601,9 @@ function TwoDotsGame() {
                         ▶️ Play Game
                       </button>
                     </div>
+                    {providerKind && (
+                      <div className="text-xs text-gray-600 text-center">Provider: {providerKind === 'farcaster' ? 'Farcaster' : 'EVM'}</div>
+                    )}
                     {/* No warning shown when DEV wallet is missing; playback proceeds with fallback */}
                     <button onClick={() => setShowHowTo(v => !v)} className="w-full bg-gray-100 text-gray-800 font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all border">📘 How to Play</button>
                   </div>
