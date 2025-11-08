@@ -240,6 +240,39 @@ function TwoDotsGame() {
         setPaymentStatus('⚠️ No wallet provider found.');
         return;
       }
+      // Ensure we are on Base mainnet (chainId 0x2105)
+      try {
+        const BASE_CHAIN_ID = '0x2105';
+        let chainId = await eth.request({ method: 'eth_chainId' });
+        if (chainId !== BASE_CHAIN_ID) {
+          setPaymentStatus('🔄 Switching to Base network…');
+          try {
+            await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BASE_CHAIN_ID }] });
+            chainId = BASE_CHAIN_ID;
+          } catch (switchErr) {
+            try {
+              await eth.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                  chainId: BASE_CHAIN_ID,
+                  chainName: 'Base',
+                  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+                  rpcUrls: ['https://mainnet.base.org'],
+                  blockExplorerUrls: ['https://basescan.org']
+                }]
+              });
+              await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BASE_CHAIN_ID }] });
+              chainId = BASE_CHAIN_ID;
+            } catch (addErr) {
+              console.warn('Failed to switch/add Base network:', addErr);
+              setPaymentStatus('⚠️ Could not switch to Base network. Please switch manually in your wallet.');
+              return;
+            }
+          }
+        }
+      } catch (chainErr) {
+        console.warn('chainId check/switch failed:', chainErr);
+      }
       const valueHex = '0x' + WEI_0_00001_ETH.toString(16);
       setTxPending(true);
       const txHash = await eth.request({
@@ -247,16 +280,17 @@ function TwoDotsGame() {
         params: [{ from: walletAddress, to: DEV_WALLET, value: valueHex }]
       });
       setTxHash(txHash);
-      setPaymentStatus('⏳ Payment sent. Waiting for confirmation…');
+      setPaymentStatus('⏳ Payment sent. اختر الوضع Classic/PvP/Speed…');
+      // Go to mode selection menu immediately
+      setMenuView('select');
+      setShowHowTo(false);
+      setShowMenu(true);
       const receipt = await waitForReceipt(eth, txHash);
       if (!receipt) {
-        setPaymentStatus('⚠️ Payment pending. It may confirm shortly.');
+        setPaymentStatus('⚠️ Payment pending. التأكيد قريباً…');
         return;
       }
       setPaymentStatus('✅ Payment confirmed! Enjoy the game.');
-      // Transition to play
-      setShowMenu(false);
-      initializeGrid();
     } catch (err) {
       console.warn('payAndStartGame error:', err);
       setPaymentStatus(`❌ Payment failed: ${err?.message || 'Unknown error'}`);
