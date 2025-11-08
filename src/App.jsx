@@ -75,34 +75,19 @@ function TwoDotsGame() {
     return v || e || null;
   };
   const getPaymentRecipient = () => effectiveDevWallet();
-  // Detect Warpcast environment to avoid forcing Farcaster on normal browsers
+  // Detect Warpcast environment (original simple logic)
   const isWarpcastEnv = () => {
     try {
-      const params = new URLSearchParams((typeof window !== 'undefined' ? window.location.search : '') || '');
-      const override = params.get('warpcast') || params.get('fc') || '';
-      if (['1','true','yes','warpcast'].includes(String(override).toLowerCase())) return true;
-
       const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
-      if (/warpcast|farcaster/i.test(ua)) return true;
-
-      const ref = (typeof document !== 'undefined' ? document.referrer : '') || '';
-      if (/warpcast\.com|farcaster\.xyz/i.test(ref)) return true;
-
+      if (/warpcast/i.test(ua)) return true;
       const sdk = (
+        window.__farcasterMiniappSDK ||
         window.warpcast || window.Warpcast ||
         window.farcaster || window.Farcaster ||
-        window.fc || window.sdk ||
-        window.__farcasterMiniappSDK || null
+        window.fc || window.sdk || null
       );
-      const platform = (sdk?.environment?.platform || sdk?.context?.client || sdk?.platform || '') + '';
-      if (/warpcast|farcaster/i.test(platform)) return true;
-
-      // Heuristics for mobile container bridges
-      if (typeof window !== 'undefined') {
-        if (window.ReactNativeWebView && /warpcast/i.test(ua)) return true;
-        const wkh = window.webkit && window.webkit.messageHandlers;
-        if (wkh && (wkh.warpcast || wkh.farcaster)) return true;
-      }
+      const client = (sdk?.context?.client || sdk?.environment?.platform || '') + '';
+      if (/warpcast/i.test(client)) return true;
     } catch {}
     return false;
   };
@@ -238,11 +223,10 @@ function TwoDotsGame() {
             try { sdk.actions.ready(); } catch {}
           }
           window.__farcasterMiniappSDK = sdk;
-          // Inside Warpcast, enforce Farcaster preference regardless of previous local choice
+          // Inside Warpcast, prefer Farcaster only when preference is 'auto'
           try {
             if (isWarpcastEnv()) {
-              setProviderPreferred('farcaster');
-              try { localStorage.setItem('twodots_provider_pref', 'farcaster'); } catch {}
+              setProviderPreferred((prev) => (prev === 'auto' ? 'farcaster' : prev));
             }
           } catch {}
           // Try to extract FID safely
@@ -285,13 +269,6 @@ function TwoDotsGame() {
       const accounts = await eth.request({ method: 'eth_requestAccounts' });
       if (accounts && accounts.length > 0) {
         setWalletAddress(accounts[0]);
-      }
-      // Fallback for providers that only support eth_accounts
-      if (!walletAddress) {
-        try {
-          const acc2 = await eth.request({ method: 'eth_accounts' }) || [];
-          if (acc2 && acc2.length > 0) setWalletAddress(acc2[0]);
-        } catch {}
       }
       // Try read FID if available (safe types)
       try {
@@ -376,7 +353,6 @@ function TwoDotsGame() {
   // Async provider detection with preference: 'auto' tries Farcaster then EVM, 'farcaster' only Farcaster, 'evm' only EVM
   const getEthProviderAsync = async () => {
     try {
-      const insideWarpcast = isWarpcastEnv();
       const sdk = (
         window.__farcasterMiniappSDK ||
         window.farcaster ||
@@ -389,7 +365,7 @@ function TwoDotsGame() {
       );
       let provider = null;
       let kind = null;
-      const pref = insideWarpcast ? 'farcaster' : providerPreferred; // force Farcaster inside Warpcast
+      const pref = providerPreferred;
       // If user prefers EVM, skip Farcaster and wait for window.ethereum
       if (pref === 'evm') {
         const p = await waitForEthereum();
@@ -399,8 +375,7 @@ function TwoDotsGame() {
       const direct = [
         typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null,
         sdk?.ethereum || null,
-        sdk?.wallet?.ethereum || null,
-        sdk?.provider || null
+        sdk?.wallet?.ethereum || null
       ];
       for (const p of direct) {
         if (p && typeof p.request === 'function') { provider = p; kind = 'farcaster'; break; }
@@ -416,19 +391,14 @@ function TwoDotsGame() {
       if (!provider) {
         try {
           if (typeof sdk?.wallet?.connect === 'function') {
-            await sdk.wallet.connect({ chainId: '0x2105' }); // Base mainnet
+            await sdk.wallet.connect({ chainId: 8453 }); // Base mainnet (original numeric)
             const p = typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null;
             if (p && typeof p.request === 'function') { provider = p; kind = 'farcaster'; }
-            // Second attempt: request provider after connect
-            if (!provider && typeof sdk?.wallet?.requestEthereumProvider === 'function') {
-              const rp = await sdk.wallet.requestEthereumProvider();
-              if (rp && typeof rp.request === 'function') { provider = rp; kind = 'farcaster'; }
-            }
           }
         } catch {}
       }
       // If explicitly preferring Farcaster, do not fall back to window.ethereum
-      if (!provider && (pref === 'farcaster' || insideWarpcast)) {
+      if (!provider && (pref === 'farcaster')) {
         return { provider: null, kind: null };
       }
       // Otherwise (auto), fall back to window.ethereum
@@ -446,13 +416,13 @@ function TwoDotsGame() {
     try {
       setPaymentStatus('');
       if (!walletAddress) {
-        await connectWallet();
-        if (!walletAddress) return;
+        setPaymentStatus('⚠️ Connect wallet first.');
+        return;
       }
       const { provider: eth, kind } = await getEthProviderAsync();
       if (kind) setProviderKind(kind);
       if (!eth) {
-        setPaymentStatus('⚠️ No wallet provider found.');
+        setPaymentStatus('⚠️ No provider found.');
         return;
       }
       // If DEV wallet not configured (e.g., on Vercel), fallback silently to self-payment for testing
@@ -481,7 +451,7 @@ function TwoDotsGame() {
               chainId = BASE_CHAIN_ID;
             } catch (addErr) {
               console.warn('Failed to switch/add Base network:', addErr);
-              setPaymentStatus('⚠️ Could not switch to Base network. Please switch manually in your wallet.');
+              setPaymentStatus('❌ Could not switch to Base.');
               return;
             }
           }
@@ -492,7 +462,7 @@ function TwoDotsGame() {
       const valueHex = '0x' + WEI_0_00001_ETH.toString(16);
       const toAddr = getPaymentRecipient();
       if (!toAddr) {
-        setPaymentStatus('❌ Recipient not configured. Please set VITE_DEV_WALLET or farcaster.json baseBuilder.ownerAddress.');
+        setPaymentStatus('⚠️ Recipient not configured.');
         return;
       }
       setTxPending(true);
@@ -514,21 +484,13 @@ function TwoDotsGame() {
       setPaymentStatus('✅ Payment confirmed! Enjoy the game.');
     } catch (err) {
       console.warn('payAndStartGame error:', err);
-      setPaymentStatus(`❌ Payment failed: ${err?.message || 'Unknown error'}`);
+      setPaymentStatus(`❌ Payment failed (${err?.message || 'Unknown error'}).`);
     } finally {
       setTxPending(false);
     }
   };
 
-  // Guest mode: start without wallet/payment
-  const startGuestMode = () => {
-    try {
-      setPaymentStatus('🎮 Guest mode: playing without wallet.');
-      setMenuView('select');
-      setShowHowTo(false);
-      setShowMenu(true);
-    } catch {}
-  };
+  // (Guest mode removed)
 
   useEffect(() => {
     if (score > highScore) {
@@ -1709,9 +1671,6 @@ function TwoDotsGame() {
                       <button onClick={payAndStartGame} disabled={!walletAddress || txPending || !effectiveDevWallet()} className={`w-full ${(!walletAddress || txPending || !effectiveDevWallet()) ? 'bg-gray-400 cursor-not-allowed':'bg-gradient-to-r from-purple-600 to-pink-600'} text-white font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all shadow-lg`}>
                         ▶️ Play Game
                       </button>
-                      <button onClick={startGuestMode} className={`w-full bg-gray-100 text-gray-800 font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all border`}>
-                        🎮 Play without wallet
-                      </button>
                     </div>
                     {providerKind && (
                       <div className="text-xs text-gray-600 text-center">Provider: {providerKind === 'farcaster' ? 'Farcaster' : 'EVM'}</div>
@@ -1746,7 +1705,7 @@ function TwoDotsGame() {
                         >Auto</button>
                       </div>
                     )}
-                    {/* No warning shown when DEV wallet is missing; playback proceeds with fallback */}
+                    {/* If DEV wallet is missing, Play Game stays disabled */}
                     <button onClick={() => setShowHowTo(v => !v)} className="w-full bg-gray-100 text-gray-800 font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all border">📘 How to Play</button>
                   </div>
                   {showHowTo && (
