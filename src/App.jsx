@@ -78,16 +78,31 @@ function TwoDotsGame() {
   // Detect Warpcast environment to avoid forcing Farcaster on normal browsers
   const isWarpcastEnv = () => {
     try {
+      const params = new URLSearchParams((typeof window !== 'undefined' ? window.location.search : '') || '');
+      const override = params.get('warpcast') || params.get('fc') || '';
+      if (['1','true','yes','warpcast'].includes(String(override).toLowerCase())) return true;
+
       const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
       if (/warpcast/i.test(ua)) return true;
+
+      const ref = (typeof document !== 'undefined' ? document.referrer : '') || '';
+      if (/warpcast\.com/i.test(ref)) return true;
+
       const sdk = (
-        window.__farcasterMiniappSDK ||
         window.warpcast || window.Warpcast ||
         window.farcaster || window.Farcaster ||
-        window.fc || window.sdk || null
+        window.fc || window.sdk ||
+        window.__farcasterMiniappSDK || null
       );
-      const client = (sdk?.context?.client || sdk?.environment?.platform || '') + '';
-      if (/warpcast/i.test(client)) return true;
+      const platform = (sdk?.environment?.platform || sdk?.context?.client || sdk?.platform || '') + '';
+      if (/warpcast|farcaster/i.test(platform)) return true;
+
+      // Heuristics for mobile container bridges
+      if (typeof window !== 'undefined') {
+        if (window.ReactNativeWebView && /warpcast/i.test(ua)) return true;
+        const wkh = window.webkit && window.webkit.messageHandlers;
+        if (wkh && (wkh.warpcast || wkh.farcaster)) return true;
+      }
     } catch {}
     return false;
   };
@@ -209,11 +224,19 @@ function TwoDotsGame() {
   useEffect(() => {
     (async () => {
       try {
-        const mod = await import('https://esm.sh/@farcaster/miniapp-sdk');
-        const sdk = mod?.sdk ?? mod?.default ?? mod;
-        if (sdk?.actions?.ready) {
-          sdk.actions.ready();
-          // Optional: expose for debugging/inspection
+        let sdk = (
+          window.warpcast || window.Warpcast ||
+          window.farcaster || window.Farcaster ||
+          window.fc || window.sdk || null
+        );
+        if (!sdk) {
+          const mod = await import('https://esm.sh/@farcaster/miniapp-sdk');
+          sdk = mod?.sdk ?? mod?.default ?? mod;
+        }
+        if (sdk) {
+          if (typeof sdk?.actions?.ready === 'function') {
+            try { sdk.actions.ready(); } catch {}
+          }
           window.__farcasterMiniappSDK = sdk;
           // Inside Warpcast, enforce Farcaster preference regardless of previous local choice
           try {
