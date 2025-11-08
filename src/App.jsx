@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { sdk as fcSdk } from '@farcaster/miniapp-sdk';
 import { Bomb, Shuffle, Plus, Star, Trophy, Zap } from 'lucide-react';
+import { useAccount, useConnect, useDisconnect, useSendTransaction, useWaitForTransactionReceipt, useChainId, useSwitchChain } from 'wagmi';
+import { parseEther } from 'viem';
+import { base } from 'wagmi/chains';
 
 const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8'];
 const MOVES_LIMIT = 30;
@@ -59,6 +62,14 @@ function TwoDotsGame() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [txPending, setTxPending] = useState(false);
   const [txHash, setTxHash] = useState(null);
+  // Wagmi hooks for Farcaster Mini App connector
+  const { isConnected, address } = useAccount();
+  const { connect, connectors, isPending: connectPending } = useConnect();
+  const { disconnect } = useDisconnect();
+  const { data: wagmiHash, sendTransaction, isPending: isSending } = useSendTransaction();
+  const chainId = useChainId();
+  const { switchChainAsync } = useSwitchChain();
+  const { data: txReceipt } = useWaitForTransactionReceipt({ hash: txHash, confirmations: 1 });
   const [paymentStatus, setPaymentStatus] = useState('');
   const [providerKind, setProviderKind] = useState(null); // 'farcaster' | 'evm' | null
   const [providerDebug, setProviderDebug] = useState('');
@@ -66,6 +77,21 @@ function TwoDotsGame() {
   const [providerPreferred, setProviderPreferred] = useState(
     PROVIDER_LOCK === 'evm' ? 'evm' : (PROVIDER_LOCK === 'farcaster' ? 'farcaster' : 'auto')
   ); // 'auto' | 'farcaster' | 'evm'
+
+  useEffect(() => {
+    if (address) setWalletAddress(address);
+  }, [address]);
+
+  useEffect(() => {
+    setTxPending(Boolean(isSending));
+    if (wagmiHash) setTxHash(wagmiHash);
+  }, [isSending, wagmiHash]);
+
+  useEffect(() => {
+    if (txHash && txReceipt) {
+      setPaymentStatus('✅ Payment confirmed! Enjoy the game.');
+    }
+  }, [txHash, txReceipt]);
 
   const DEV_WALLET_ENV = import.meta.env.VITE_DEV_WALLET || '0xYourDevWalletHere';
   const [manifestDevWallet, setManifestDevWallet] = useState(null);
@@ -249,17 +275,12 @@ function TwoDotsGame() {
     try {
       setIsConnecting(true);
       setPaymentStatus('');
-      const { provider: eth, kind } = await getEthProviderAsync();
-      if (kind) setProviderKind(kind);
-      if (!eth) {
-        setPaymentStatus('⚠️ No wallet provider found. Install MetaMask or use Farcaster Miniapp.');
+      const connector = connectors?.[0];
+      if (!connector) {
+        setPaymentStatus('⚠️ No Wagmi connector available. Open inside Warpcast.');
         return;
       }
-      const accounts = await eth.request({ method: 'eth_requestAccounts' });
-      if (accounts && accounts.length > 0) {
-        setWalletAddress(accounts[0]);
-      }
-      // Try read FID if available (safe types)
+      await connect({ connector });
       try {
         if (typeof fcSdk?.actions?.getFid === 'function') {
           const f = await fcSdk.actions.getFid();
@@ -404,78 +425,34 @@ function TwoDotsGame() {
   const payAndStartGame = async () => {
     try {
       setPaymentStatus('');
-      if (!walletAddress) {
+      if (!isConnected || !walletAddress) {
         setPaymentStatus('⚠️ Connect wallet first.');
         return;
       }
-      const { provider: eth, kind } = await getEthProviderAsync();
-      if (kind) setProviderKind(kind);
-      if (!eth) {
-        setPaymentStatus('⚠️ No provider found.');
+      // Ensure Base chain
+      try {
+        if (chainId !== base.id) {
+          setPaymentStatus('🔄 Switching to Base network…');
+          await switchChainAsync({ chainId: base.id });
+        }
+      } catch (switchErr) {
+        console.warn('Failed to switch to Base:', switchErr);
+        setPaymentStatus('❌ Could not switch to Base.');
         return;
       }
-      // If DEV wallet not configured (e.g., on Vercel), fallback silently to self-payment for testing
-      // Ensure we are on Base mainnet (chainId 0x2105)
-      try {
-        const BASE_CHAIN_ID = '0x2105';
-        let chainId = await eth.request({ method: 'eth_chainId' });
-        if (chainId !== BASE_CHAIN_ID) {
-          setPaymentStatus('🔄 Switching to Base network…');
-          try {
-            await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BASE_CHAIN_ID }] });
-            chainId = BASE_CHAIN_ID;
-          } catch (switchErr) {
-            try {
-              await eth.request({
-                method: 'wallet_addEthereumChain',
-                params: [{
-                  chainId: BASE_CHAIN_ID,
-                  chainName: 'Base',
-                  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-                  rpcUrls: ['https://mainnet.base.org'],
-                  blockExplorerUrls: ['https://basescan.org']
-                }]
-              });
-              await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BASE_CHAIN_ID }] });
-              chainId = BASE_CHAIN_ID;
-            } catch (addErr) {
-              console.warn('Failed to switch/add Base network:', addErr);
-              setPaymentStatus('❌ Could not switch to Base.');
-              return;
-            }
-          }
-        }
-      } catch (chainErr) {
-        console.warn('chainId check/switch failed:', chainErr);
-      }
-      const valueHex = '0x' + WEI_0_00001_ETH.toString(16);
       const toAddr = getPaymentRecipient();
       if (!toAddr) {
         setPaymentStatus('⚠️ Recipient not configured.');
         return;
       }
-      setTxPending(true);
-      const txHash = await eth.request({
-        method: 'eth_sendTransaction',
-        params: [{ from: walletAddress, to: toAddr, value: valueHex }]
-      });
-      setTxHash(txHash);
+      await sendTransaction({ to: toAddr, value: parseEther('0.00001') });
       setPaymentStatus('⏳ Payment sent. اختر الوضع Classic/PvP/Speed…');
-      // Go to mode selection menu immediately
       setMenuView('select');
       setShowHowTo(false);
       setShowMenu(true);
-      const receipt = await waitForReceipt(eth, txHash);
-      if (!receipt) {
-        setPaymentStatus('⚠️ Payment pending. التأكيد قريباً…');
-        return;
-      }
-      setPaymentStatus('✅ Payment confirmed! Enjoy the game.');
     } catch (err) {
       console.warn('payAndStartGame error:', err);
       setPaymentStatus(`❌ Payment failed (${err?.message || 'Unknown error'}).`);
-    } finally {
-      setTxPending(false);
     }
   };
 
