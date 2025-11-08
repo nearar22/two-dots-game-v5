@@ -190,6 +190,16 @@ function TwoDotsGame() {
     try { localStorage.setItem('twodots_provider_pref', providerPreferred); } catch {}
   }, [providerPreferred]);
 
+  // Local dev: prefer MetaMask on localhost to ensure easy testing
+  useEffect(() => {
+    try {
+      const host = (typeof window !== 'undefined' && window.location && window.location.hostname) ? window.location.hostname : '';
+      if (host === 'localhost' || host === '127.0.0.1') {
+        setProviderPreferred((prev) => prev === 'evm' ? prev : 'evm');
+      }
+    } catch {}
+  }, []);
+
   // Load dev wallet from farcaster.json manifest for recipient address
   useEffect(() => {
     (async () => {
@@ -241,11 +251,6 @@ function TwoDotsGame() {
       setPaymentStatus('');
       const { provider: eth, kind } = await getEthProviderAsync();
       if (kind) setProviderKind(kind);
-      // Strict guard: if Farcaster-only selected, block EVM fallback
-      if (providerPreferred === 'farcaster' && kind !== 'farcaster') {
-        setPaymentStatus('⚠️ Farcaster-only selected. No Farcaster provider found. Open in Warpcast.');
-        return;
-      }
       if (!eth) {
         setPaymentStatus('⚠️ No wallet provider found. Install MetaMask or use Farcaster Miniapp.');
         return;
@@ -341,6 +346,18 @@ function TwoDotsGame() {
       dbg.push(`sdk:${sdk ? 'yes' : 'no'}`);
       dbg.push(`reqProv:${typeof sdk?.wallet?.requestEthereumProvider}`);
       dbg.push(`getProv:${typeof sdk?.wallet?.getEthereumProvider}`);
+      // If not inside Warpcast (local browser), try MetaMask first
+      try {
+        const warp = isWarpcastEnv();
+        if (!warp) {
+          const pLocal = await waitForEthereum();
+          if (pLocal && typeof pLocal.request === 'function') {
+            dbg.push('localFirst:evm');
+            setProviderDebug(dbg.join(' | '));
+            return { provider: pLocal, kind: 'evm' };
+          }
+        }
+      } catch {}
       let provider = null;
       let kind = null;
       const pref = providerPreferred;
@@ -371,11 +388,6 @@ function TwoDotsGame() {
       dbg.push(`reqAfter:${provider ? 'ok' : 'none'}`);
       // Do not use connect() here per minimal docs guidance
       dbg.push(`afterConnect:none`);
-      // If explicitly preferring Farcaster, do not fall back to window.ethereum
-      if (!provider && (pref === 'farcaster')) {
-        setProviderDebug(dbg.join(' | '));
-        return { provider: null, kind: null };
-      }
       // Otherwise (auto), fall back to window.ethereum
       if (!provider) {
         const p = await waitForEthereum();
