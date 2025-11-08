@@ -652,7 +652,7 @@ function TwoDotsGame() {
     const gridViewportEl = document.querySelector('.grid-viewport');
     const containerEl = document.querySelector('.game-container');
     const isMobile = window.innerWidth < 640;
-    const gridGap = isMobile ? 8 : 8; // approximate gap-1/sm:gap-2
+    const gridGap = isMobile ? 4 : 8; // match Tailwind gap-1 (4px) / sm:gap-2 (8px)
 
     const containerWidth = containerEl?.clientWidth || Math.min(window.innerWidth, cardMaxWidth);
     const availWidth = gridViewportEl?.clientWidth || containerWidth;
@@ -688,6 +688,18 @@ function TwoDotsGame() {
   }, [gridSize]);
 
   // Fallback: derive grid cell by pointer coordinates if elementFromPoint fails
+  // Read current grid gap (px); fallback to Tailwind defaults
+  const getGridGapPx = () => {
+    const el = gridRef.current;
+    const isMobile = window.innerWidth < 640;
+    if (!el) return isMobile ? 4 : 8;
+    const styles = window.getComputedStyle(el);
+    const colGap = parseFloat(styles.getPropertyValue('column-gap'));
+    const rowGap = parseFloat(styles.getPropertyValue('row-gap'));
+    const g = Math.max(isNaN(colGap) ? 0 : colGap, isNaN(rowGap) ? 0 : rowGap);
+    return g || (isMobile ? 4 : 8);
+  };
+
   const getGridCellFromPoint = (clientX, clientY) => {
     const el = gridRef.current;
     if (!el) return null;
@@ -695,8 +707,7 @@ function TwoDotsGame() {
     const x = clientX - rect.left;
     const y = clientY - rect.top;
     if (x < 0 || y < 0 || x > rect.width || y > rect.height) return null;
-    const isMobile = window.innerWidth < 640;
-    const gridGap = isMobile ? 8 : 8;
+    const gridGap = getGridGapPx();
     const cellSpan = dotSize + gridGap;
     const col = Math.floor(x / cellSpan);
     const row = Math.floor(y / cellSpan);
@@ -1219,8 +1230,18 @@ function TwoDotsGame() {
             )}
             <svg className="absolute top-0 left-0 pointer-events-none" style={{ width: '100%', height: '100%', zIndex: 20 }}>
               {selectedDots.length > 1 && <>
-                <path d={selectedDots.map((d, i) => `${i === 0 ? 'M' : 'L'} ${d.col * dotSize + dotSize/2} ${d.row * dotSize + dotSize/2}`).join(' ')} stroke={selectedDots[0].color} strokeWidth={dotSize/5} strokeLinecap="round" fill="none" opacity="0.7" />
-                <path d={selectedDots.map((d, i) => `${i === 0 ? 'M' : 'L'} ${d.col * dotSize + dotSize/2} ${d.row * dotSize + dotSize/2}`).join(' ')} stroke="white" strokeWidth={dotSize/10} strokeLinecap="round" fill="none" opacity="0.95" />
+                <path d={selectedDots.map((d, i) => {
+                  const g = getGridGapPx();
+                  const x = d.col * (dotSize + g) + dotSize/2;
+                  const y = d.row * (dotSize + g) + dotSize/2;
+                  return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+                }).join(' ')} stroke={selectedDots[0].color} strokeWidth={dotSize/5} strokeLinecap="round" fill="none" opacity="0.7" />
+                <path d={selectedDots.map((d, i) => {
+                  const g = getGridGapPx();
+                  const x = d.col * (dotSize + g) + dotSize/2;
+                  const y = d.row * (dotSize + g) + dotSize/2;
+                  return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+                }).join(' ')} stroke="white" strokeWidth={dotSize/10} strokeLinecap="round" fill="none" opacity="0.95" />
               </>}
             </svg>
             {explosions.map(exp => {
