@@ -83,10 +83,10 @@ function TwoDotsGame() {
       if (['1','true','yes','warpcast'].includes(String(override).toLowerCase())) return true;
 
       const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
-      if (/warpcast/i.test(ua)) return true;
+      if (/warpcast|farcaster/i.test(ua)) return true;
 
       const ref = (typeof document !== 'undefined' ? document.referrer : '') || '';
-      if (/warpcast\.com/i.test(ref)) return true;
+      if (/warpcast\.com|farcaster\.xyz/i.test(ref)) return true;
 
       const sdk = (
         window.warpcast || window.Warpcast ||
@@ -399,7 +399,8 @@ function TwoDotsGame() {
       const direct = [
         typeof sdk?.wallet?.getEthereumProvider === 'function' ? sdk.wallet.getEthereumProvider() : null,
         sdk?.ethereum || null,
-        sdk?.wallet?.ethereum || null
+        sdk?.wallet?.ethereum || null,
+        sdk?.provider || null
       ];
       for (const p of direct) {
         if (p && typeof p.request === 'function') { provider = p; kind = 'farcaster'; break; }
