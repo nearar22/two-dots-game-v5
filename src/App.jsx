@@ -237,10 +237,7 @@ function TwoDotsGame() {
         setPaymentStatus('⚠️ No wallet provider found.');
         return;
       }
-      // If DEV wallet not configured (e.g., on Vercel), fallback to self-payment for testing
-      if (!isDevWalletConfigured()) {
-        setPaymentStatus('⚠️ VITE_DEV_WALLET ما مضبوطاش فـ .env ديال Vercel. غادي نرسل الدفع لعنوان محفظتك باش التجربة تكمل.');
-      }
+      // If DEV wallet not configured (e.g., on Vercel), fallback silently to self-payment for testing
       // Ensure we are on Base mainnet (chainId 0x2105)
       try {
         const BASE_CHAIN_ID = '0x2105';
@@ -1485,11 +1482,7 @@ function TwoDotsGame() {
                         ▶️ Play Game
                       </button>
                     </div>
-                    {!isDevWalletConfigured() && (
-                      <div className="text-xs text-orange-600 mt-2">
-                        ملاحظة: <span className="font-mono">VITE_DEV_WALLET</span> ما مضبوطاش. الدفع غادي يمشي لعنوان محفظتك للتجربة. باش الدفع يمشي لعنوان المطوّر فالنشر، زيد المتغيّر فـ Vercel.
-                      </div>
-                    )}
+                    {/* No warning shown when DEV wallet is missing; playback proceeds with fallback */}
                     <button onClick={() => setShowHowTo(v => !v)} className="w-full bg-gray-100 text-gray-800 font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all border">📘 How to Play</button>
                   </div>
                   {showHowTo && (
