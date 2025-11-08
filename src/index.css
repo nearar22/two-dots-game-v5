@@ -42,3 +42,29 @@ body {
   justify-content: center;
   overflow: hidden;
 }
+
+/* Compact stats bar */
+.stats-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #3b82f6, #9333ea);
+  color: #fff;
+  font-weight: 600;
+}
+.stats-bar .divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(255,255,255,0.5);
+}
+@media (max-width: 640px) {
+  .stats-bar {
+    gap: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .stats-bar .divider { height: 14px; }
+}

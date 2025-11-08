@@ -1003,28 +1003,14 @@ function TwoDotsGame() {
           })}
         </div>
         
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4 text-sm sm:text-lg font-semibold stats-grid">
-          <div className="flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-2 sm:px-4 py-2 rounded-full">
-            <Trophy size={20} className="sm:w-6 sm:h-6" />
-            <span>Score: {score}</span>
-          </div>
-          <div className="flex items-center justify-center space-x-2 bg-gradient-to-r from-orange-500 to-red-500 text-white px-2 sm:px-4 py-2 rounded-full">
-            <Zap size={20} className="sm:w-6 sm:h-6" />
-            <span>Moves: {moves}</span>
-          </div>
-          {(gameMode === GAME_MODES.Robo || gameMode === GAME_MODES.RoboTimed) && (
-            <div className="flex items-center justify-center gap-3 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 text-white px-3 sm:px-4 py-2 rounded-full">
-              <span className="font-bold">🙂 You: {score}</span>
-              <span className="opacity-80">vs</span>
-              <span className="font-bold">👤 {opponentName || 'Opponent'}: {roboScore}</span>
-            </div>
-          )}
-          {combo > 0 && <div className="flex items-center justify-center space-x-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-2 sm:px-4 py-2 rounded-full" style={{animation: 'pulse 0.5s infinite'}}>
-            <span>🔥 x{combo}</span>
-          </div>}
-          <div className="flex items-center justify-center space-x-2 bg-gradient-to-r from-yellow-500 to-amber-600 text-white px-2 sm:px-4 py-2 rounded-full">
-            <Trophy size={20} className="sm:w-6 sm:h-6" />
-            <span>Best: {highScore}</span>
+        {/* Compact stats bar to save vertical space */}
+        <div className="flex justify-center mb-3">
+          <div className="stats-bar">
+            <span>🏆 Score: {score}</span>
+            <span className="divider" />
+            <span>⚡ Moves: {moves}</span>
+            <span className="divider" />
+            <span>🥇 Best: {highScore}</span>
           </div>
         </div>
 
@@ -1446,10 +1432,7 @@ function TwoDotsGame() {
           <button onClick={initializeGrid} className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all shadow-lg">🔄 New Game</button>
         )}
 
-        <div className="mt-4 text-sm text-gray-600 space-y-1">
-          <p><strong>Special Dots:</strong></p>
-          <p>🌈 Rainbow = any color | 💎 Gem = 3x points | 💣 Bomb = 3×3 area | ⚡ Lightning = row+column</p>
-        </div>
+        {/* Legend removed to gain space in Farcaster/Base mini app */}
       </div>
     </div>
   );
