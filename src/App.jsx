@@ -61,6 +61,9 @@ function TwoDotsGame() {
   const [paymentStatus, setPaymentStatus] = useState('');
   const [providerKind, setProviderKind] = useState(null); // 'farcaster' | 'evm' | null
   const PROVIDER_LOCK = (import.meta.env.VITE_PROVIDER_LOCK || '').toLowerCase(); // 'farcaster' | 'evm' | ''
+  const [providerPreferred, setProviderPreferred] = useState(
+    PROVIDER_LOCK === 'evm' ? 'evm' : (PROVIDER_LOCK === 'farcaster' ? 'farcaster' : 'auto')
+  ); // 'auto' | 'farcaster' | 'evm'
 
   const DEV_WALLET_ENV = import.meta.env.VITE_DEV_WALLET || '0xYourDevWalletHere';
   const [manifestDevWallet, setManifestDevWallet] = useState(null);
@@ -295,14 +298,15 @@ function TwoDotsGame() {
     }
   });
 
-  // Async provider detection: prefer Farcaster SDK provider, request via SDK if needed, then fall back to window.ethereum
+  // Async provider detection with preference: 'auto' tries Farcaster then EVM, 'farcaster' only Farcaster, 'evm' only EVM
   const getEthProviderAsync = async () => {
     try {
       const sdk = window.__farcasterMiniappSDK;
       let provider = null;
       let kind = null;
-      // If lock set to EVM, skip Farcaster and wait for window.ethereum
-      if (PROVIDER_LOCK === 'evm') {
+      const pref = providerPreferred; // runtime preference
+      // If user prefers EVM, skip Farcaster and wait for window.ethereum
+      if (pref === 'evm') {
         const p = await waitForEthereum();
         if (p && typeof p.request === 'function') { return { provider: p, kind: 'evm' }; }
         return { provider: null, kind: null };
@@ -332,8 +336,12 @@ function TwoDotsGame() {
           }
         } catch {}
       }
-      // If lock set to Farcaster, do not fall back to window.ethereum
-      if (!provider && PROVIDER_LOCK !== 'farcaster') {
+      // If explicitly preferring Farcaster, do not fall back to window.ethereum
+      if (!provider && pref === 'farcaster') {
+        return { provider: null, kind: null };
+      }
+      // Otherwise (auto), fall back to window.ethereum
+      if (!provider) {
         const p = await waitForEthereum();
         if (p && typeof p.request === 'function') { provider = p; kind = 'evm'; }
       }
@@ -1603,6 +1611,25 @@ function TwoDotsGame() {
                     </div>
                     {providerKind && (
                       <div className="text-xs text-gray-600 text-center">Provider: {providerKind === 'farcaster' ? 'Farcaster' : 'EVM'}</div>
+                    )}
+                    {debugEnabled && (
+                      <div className="flex justify-center gap-2 mt-1">
+                        <button
+                          onClick={() => setProviderPreferred('farcaster')}
+                          className={`text-xs px-3 py-1 rounded-full border ${providerPreferred === 'farcaster' ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-200 text-gray-800 border-gray-300'}`}
+                          title="Prefer Farcaster"
+                        >Farcaster</button>
+                        <button
+                          onClick={() => setProviderPreferred('evm')}
+                          className={`text-xs px-3 py-1 rounded-full border ${providerPreferred === 'evm' ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-200 text-gray-800 border-gray-300'}`}
+                          title="Prefer EVM"
+                        >EVM</button>
+                        <button
+                          onClick={() => setProviderPreferred('auto')}
+                          className={`text-xs px-3 py-1 rounded-full border ${providerPreferred === 'auto' ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-200 text-gray-800 border-gray-300'}`}
+                          title="Auto (Farcaster → EVM)"
+                        >Auto</button>
+                      </div>
                     )}
                     {/* No warning shown when DEV wallet is missing; playback proceeds with fallback */}
                     <button onClick={() => setShowHowTo(v => !v)} className="w-full bg-gray-100 text-gray-800 font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all border">📘 How to Play</button>
