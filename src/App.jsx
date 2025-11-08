@@ -52,6 +52,18 @@ function TwoDotsGame() {
   const [matchBaseTime, setMatchBaseTime] = useState(45);
   const [matchTimeLeft, setMatchTimeLeft] = useState(45);
   const [duelResult, setDuelResult] = useState(null);
+  // Wallet & payment
+  const [walletAddress, setWalletAddress] = useState(null);
+  const [fid, setFid] = useState(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [txPending, setTxPending] = useState(false);
+  const [txHash, setTxHash] = useState(null);
+  const [paymentStatus, setPaymentStatus] = useState('');
+
+  const DEV_WALLET = import.meta.env.VITE_DEV_WALLET || '0xYourDevWalletHere';
+  const WEI_0_00001_ETH = 10000000000000n; // 0.00001 ETH in wei
+  const shortAddr = (addr) => addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '';
+  const isDevWalletConfigured = () => DEV_WALLET && DEV_WALLET.startsWith('0x') && DEV_WALLET.length === 42 && !DEV_WALLET.includes('YourDevWallet');
   // Lock winner synchronously to avoid race conditions between player and robo updates
   const duelLockedRef = useRef(null); // 'player' | 'robo' | null
   // Attempt to lock winner deterministically for PvP Score race
@@ -131,6 +143,127 @@ function TwoDotsGame() {
       if (savedKey && savedKey === expected) setDebugEnabled(true);
     }
   }, []);
+
+  // Farcaster Miniapp SDK: import dynamically and signal readiness
+  useEffect(() => {
+    (async () => {
+      try {
+        const mod = await import('https://esm.sh/@farcaster/miniapp-sdk');
+        const sdk = mod?.sdk ?? mod?.default ?? mod;
+        if (sdk?.actions?.ready) {
+          sdk.actions.ready();
+          // Optional: expose for debugging/inspection
+          window.__farcasterMiniappSDK = sdk;
+          // Try to extract FID safely
+          const tryGetFid = async () => {
+            try {
+              if (typeof sdk?.actions?.getFid === 'function') {
+                const f = await sdk.actions.getFid();
+                if (typeof f === 'number' || typeof f === 'string') { setFid(f); return; }
+              }
+              const fields = [sdk?.user?.fid, sdk?.context?.fid, sdk?.state?.user?.fid];
+              for (const val of fields) {
+                if (typeof val === 'number' || typeof val === 'string') { setFid(val); return; }
+              }
+            } catch {}
+          };
+          tryGetFid();
+        }
+      } catch (err) {
+        console.warn('Farcaster Miniapp SDK load/ready failed:', err);
+      }
+    })();
+  }, []);
+
+  // Connect wallet via Farcaster or window.ethereum
+  const connectWallet = async () => {
+    try {
+      setIsConnecting(true);
+      setPaymentStatus('');
+      const sdk = window.__farcasterMiniappSDK;
+      // Prefer window.ethereum
+      const eth = window.ethereum || sdk?.ethereum || sdk?.wallet?.ethereum || null;
+      if (!eth) {
+        setPaymentStatus('⚠️ No wallet provider found. Install MetaMask or use Farcaster Miniapp.');
+        return;
+      }
+      const accounts = await eth.request({ method: 'eth_requestAccounts' });
+      if (accounts && accounts.length > 0) {
+        setWalletAddress(accounts[0]);
+      }
+      // Try read FID if available (safe types)
+      try {
+        if (typeof sdk?.actions?.getFid === 'function') {
+          const f = await sdk.actions.getFid();
+          if (typeof f === 'number' || typeof f === 'string') setFid(f);
+        } else {
+          const fields = [sdk?.user?.fid, sdk?.context?.fid, sdk?.state?.user?.fid];
+          for (const val of fields) {
+            if (typeof val === 'number' || typeof val === 'string') { setFid(val); break; }
+          }
+        }
+      } catch {}
+    } catch (err) {
+      console.warn('connectWallet error:', err);
+      setPaymentStatus(`❌ Connect failed: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+  const waitForReceipt = async (eth, hash, tries = 20, intervalMs = 1500) => {
+    for (let i = 0; i < tries; i++) {
+      try {
+        const receipt = await eth.request({ method: 'eth_getTransactionReceipt', params: [hash] });
+        if (receipt) return receipt;
+      } catch (e) {}
+      await sleep(intervalMs);
+    }
+    return null;
+  };
+
+  const payAndStartGame = async () => {
+    try {
+      setPaymentStatus('');
+      if (!walletAddress) {
+        await connectWallet();
+        if (!walletAddress) return;
+      }
+      if (!isDevWalletConfigured()) {
+        setPaymentStatus('⚠️ Set VITE_DEV_WALLET in .env to your address.');
+        return;
+      }
+      const sdk = window.__farcasterMiniappSDK;
+      const eth = window.ethereum || sdk?.ethereum || sdk?.wallet?.ethereum || null;
+      if (!eth) {
+        setPaymentStatus('⚠️ No wallet provider found.');
+        return;
+      }
+      const valueHex = '0x' + WEI_0_00001_ETH.toString(16);
+      setTxPending(true);
+      const txHash = await eth.request({
+        method: 'eth_sendTransaction',
+        params: [{ from: walletAddress, to: DEV_WALLET, value: valueHex }]
+      });
+      setTxHash(txHash);
+      setPaymentStatus('⏳ Payment sent. Waiting for confirmation…');
+      const receipt = await waitForReceipt(eth, txHash);
+      if (!receipt) {
+        setPaymentStatus('⚠️ Payment pending. It may confirm shortly.');
+        return;
+      }
+      setPaymentStatus('✅ Payment confirmed! Enjoy the game.');
+      // Transition to play
+      setShowMenu(false);
+      initializeGrid();
+    } catch (err) {
+      console.warn('payAndStartGame error:', err);
+      setPaymentStatus(`❌ Payment failed: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setTxPending(false);
+    }
+  };
 
   useEffect(() => {
     if (score > highScore) {
@@ -1304,7 +1437,14 @@ function TwoDotsGame() {
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-gray-800">Two Dots</h2>
                   <div className="space-y-3 mb-4">
-                    <button onClick={() => { setMenuView('select'); }} className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all shadow-lg">▶️ Play Game</button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button onClick={connectWallet} disabled={isConnecting} className={`w-full ${walletAddress? 'bg-green-600 hover:bg-green-700 text-white':'bg-blue-600 hover:bg-blue-700 text-white'} font-bold py-3 px-6 rounded-xl transition-all`}>
+                        {walletAddress ? `✅ Connected: ${shortAddr(walletAddress)}` : (isConnecting ? '⏳ Connecting…' : '🔗 Connect Wallet')}
+                      </button>
+                      <button onClick={payAndStartGame} disabled={!walletAddress || txPending || !isDevWalletConfigured()} className={`w-full ${(!walletAddress || txPending || !isDevWalletConfigured()) ? 'bg-gray-400 cursor-not-allowed':'bg-gradient-to-r from-purple-600 to-pink-600'} text-white font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all shadow-lg`}>
+                        ▶️ Play Game
+                      </button>
+                    </div>
                     <button onClick={() => setShowHowTo(v => !v)} className="w-full bg-gray-100 text-gray-800 font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all border">📘 How to Play</button>
                   </div>
                   {showHowTo && (
