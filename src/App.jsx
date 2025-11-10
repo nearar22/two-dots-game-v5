@@ -480,7 +480,7 @@ function TwoDotsGame() {
       setPendingAction('start');
       await sendTransaction({ to: toAddr, value: parseEther('0.00001') });
       // Do NOT open the menu yet; wait for confirmation effect above
-      setPaymentStatus('⏳ Payment sent. كنْتسنا التأكيد من الشبكة…');
+      setPaymentStatus('⏳ Payment sent. Waiting for network confirmation…');
     } catch (err) {
       console.warn('payAndStartGame error:', err);
       setPaymentStatus(`❌ Payment failed (${err?.message || 'Unknown error'}).`);
@@ -516,7 +516,7 @@ function TwoDotsGame() {
       setPendingAction('newgame');
       await sendTransaction({ to: toAddr, value: parseEther('0.00001') });
       // Wait for confirmation to actually reset the grid
-      setPaymentStatus('⏳ Payment sent. كنْتسنا التأكيد باش نعاود اللعبة…');
+      setPaymentStatus('⏳ Payment sent. Waiting for confirmation to restart game…');
     } catch (err) {
       console.warn('payAndNewGame error:', err);
       setPaymentStatus(`❌ Payment failed (${err?.message || 'Unknown error'}).`);
