@@ -70,6 +70,7 @@ function TwoDotsGame() {
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
   const { data: txReceipt } = useWaitForTransactionReceipt({ hash: txHash, confirmations: 1 });
+  const isPaymentConfirmed = Boolean(txHash && txReceipt);
   const [paymentStatus, setPaymentStatus] = useState('');
   const [providerKind, setProviderKind] = useState(null); // 'farcaster' | 'evm' | null
   const [providerDebug, setProviderDebug] = useState('');
@@ -88,10 +89,14 @@ function TwoDotsGame() {
   }, [isSending, wagmiHash]);
 
   useEffect(() => {
-    if (txHash && txReceipt) {
+    if (isPaymentConfirmed) {
       setPaymentStatus('✅ Payment confirmed! Enjoy the game.');
+      // Only open the game selection menu AFTER confirmation
+      setShowHowTo(false);
+      setMenuView('select');
+      setShowMenu(true);
     }
-  }, [txHash, txReceipt]);
+  }, [isPaymentConfirmed]);
 
   const DEV_WALLET_ENV = import.meta.env.VITE_DEV_WALLET || '0xYourDevWalletHere';
   const [manifestDevWallet, setManifestDevWallet] = useState(null);
@@ -446,10 +451,8 @@ function TwoDotsGame() {
         return;
       }
       await sendTransaction({ to: toAddr, value: parseEther('0.00001') });
-      setPaymentStatus('⏳ Payment sent. اختر الوضع Classic/PvP/Speed…');
-      setMenuView('select');
-      setShowHowTo(false);
-      setShowMenu(true);
+      // Do NOT open the menu yet; wait for confirmation effect above
+      setPaymentStatus('⏳ Payment sent. كنْتسنا التأكيد من الشبكة…');
     } catch (err) {
       console.warn('payAndStartGame error:', err);
       setPaymentStatus(`❌ Payment failed (${err?.message || 'Unknown error'}).`);
@@ -1710,7 +1713,14 @@ function TwoDotsGame() {
                   </div>
                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                       {[{m:GAME_MODES.Classic, title:'Classic', desc:'Normal play'}, {m:GAME_MODES.Robo, title:'PvP', desc:'Invisible opponent • choose rules: Rounds • Score • Level • Timed'}, {m:GAME_MODES.Speed, title:'Speed', desc:'Speed increases • time is limited'}].map(({m, title, desc}) => (
-                        <button key={m} onClick={() => {
+                        <button
+                          key={m}
+                          disabled={!isPaymentConfirmed}
+                          onClick={() => {
+                            if (!isPaymentConfirmed) {
+                              setPaymentStatus('⚠️ Payment confirmation required.');
+                              return;
+                            }
                           if (m===GAME_MODES.Robo) {
                             setOpponentName(getRandomOpponentName());
                             setGameMode(m);
@@ -1726,7 +1736,8 @@ function TwoDotsGame() {
                             setShowHowTo(false);
                             setShowMenu(false);
                           }
-                        }} className={`p-4 rounded-2xl border-2 ${gameMode===m?'border-black':'border-gray-300'} hover:border-purple-500 transition text-left bg-gray-50 hover:bg-gray-100`}>
+                        }}
+                          className={`p-4 rounded-2xl border-2 ${gameMode===m?'border-black':'border-gray-300'} ${!isPaymentConfirmed ? 'opacity-50 cursor-not-allowed' : ''} hover:border-purple-500 transition text-left bg-gray-50 hover:bg-gray-100`}>
                           <div className="text-lg font-bold">{title}</div>
                           <div className="text-sm text-gray-600">{desc}</div>
                         </button>
