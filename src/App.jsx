@@ -275,17 +275,32 @@ function TwoDotsGame() {
     })();
   }, []);
 
-  // Connect wallet via Farcaster or window.ethereum
+  // Connect wallet via Wagmi connectors (Farcaster / Injected / WalletConnect)
   const connectWallet = async () => {
     try {
       setIsConnecting(true);
       setPaymentStatus('');
-      const connector = connectors?.[0];
-      if (!connector) {
-        setPaymentStatus('⚠️ No Wagmi connector available. Open inside Warpcast.');
+      const list = connectors || [];
+      const byId = (id) => list.find((c) => c?.id === id);
+      const byNameIncl = (frag) => list.find((c) => (c?.name || '').toLowerCase().includes(frag));
+      const cFarcaster = byId('farcaster-miniapp') || byNameIncl('farcaster');
+      const cInjected = byId('injected') || byNameIncl('injected');
+      const cWallet = byId('walletConnect') || byNameIncl('walletconnect');
+      const warp = isWarpcastEnv();
+      let chosen;
+      if (providerPreferred === 'farcaster') {
+        chosen = cFarcaster || cInjected || cWallet || list[0];
+      } else if (providerPreferred === 'evm') {
+        chosen = cInjected || cWallet || cFarcaster || list[0];
+      } else { // auto
+        chosen = warp ? (cFarcaster || cInjected || cWallet || list[0]) : (cInjected || cWallet || cFarcaster || list[0]);
+      }
+      if (!chosen) {
+        setPaymentStatus('⚠️ No Wagmi connector available.');
         return;
       }
-      await connect({ connector });
+      await connect({ connector: chosen });
+      setProviderKind((chosen?.id || '').includes('farcaster') || (chosen?.name || '').toLowerCase().includes('farcaster') ? 'farcaster' : 'evm');
       try {
         if (typeof fcSdk?.actions?.getFid === 'function') {
           const f = await fcSdk.actions.getFid();
@@ -1658,8 +1673,7 @@ function TwoDotsGame() {
                         {paymentStatus}
                       </div>
                     )}
-                    {debugEnabled && (
-                      <div className="flex justify-center gap-2 mt-1">
+                    <div className="flex justify-center gap-2 mt-1">
                         <button
                           onClick={() => setProviderPreferred('farcaster')}
                           className={`text-xs px-3 py-1 rounded-full border ${providerPreferred === 'farcaster' ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-200 text-gray-800 border-gray-300'}`}
@@ -1676,7 +1690,6 @@ function TwoDotsGame() {
                           title="Auto (Farcaster → EVM)"
                         >Auto</button>
                       </div>
-                    )}
                     {/* If DEV wallet is missing, Play Game stays disabled */}
                     <button onClick={() => setShowHowTo(v => !v)} className="w-full bg-gray-100 text-gray-800 font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all border">📘 How to Play</button>
                   </div>
