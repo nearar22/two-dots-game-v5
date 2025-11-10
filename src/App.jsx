@@ -71,6 +71,8 @@ function TwoDotsGame() {
   const { switchChainAsync } = useSwitchChain();
   const { data: txReceipt } = useWaitForTransactionReceipt({ hash: txHash, confirmations: 1 });
   const isPaymentConfirmed = Boolean(txHash && txReceipt);
+  // Track which action is waiting for a payment confirmation
+  const [pendingAction, setPendingAction] = useState(null); // 'start' | 'newgame' | null
   const [paymentStatus, setPaymentStatus] = useState('');
   const [providerKind, setProviderKind] = useState(null); // 'farcaster' | 'evm' | null
   const [providerDebug, setProviderDebug] = useState('');
@@ -90,13 +92,21 @@ function TwoDotsGame() {
 
   useEffect(() => {
     if (isPaymentConfirmed) {
-      setPaymentStatus('✅ Payment confirmed! Enjoy the game.');
-      // Only open the game selection menu AFTER confirmation
-      setShowHowTo(false);
-      setMenuView('select');
-      setShowMenu(true);
+      setPaymentStatus('✅ Payment confirmed!');
+      // Perform the action associated with this confirmation
+      if (pendingAction === 'start') {
+        // Open selection menu (initial start flow)
+        setShowHowTo(false);
+        setMenuView('select');
+        setShowMenu(true);
+      } else if (pendingAction === 'newgame') {
+        // Restart the grid in-place (in-game flow)
+        initializeGrid();
+        setShowMenu(false);
+      }
+      setPendingAction(null);
     }
-  }, [isPaymentConfirmed]);
+  }, [isPaymentConfirmed, pendingAction]);
 
   const DEV_WALLET_ENV = import.meta.env.VITE_DEV_WALLET || '0xYourDevWalletHere';
   const [manifestDevWallet, setManifestDevWallet] = useState(null);
@@ -465,11 +475,46 @@ function TwoDotsGame() {
         setPaymentStatus('⚠️ Recipient not configured.');
         return;
       }
+      setPendingAction('start');
       await sendTransaction({ to: toAddr, value: parseEther('0.00001') });
       // Do NOT open the menu yet; wait for confirmation effect above
       setPaymentStatus('⏳ Payment sent. كنْتسنا التأكيد من الشبكة…');
     } catch (err) {
       console.warn('payAndStartGame error:', err);
+      setPaymentStatus(`❌ Payment failed (${err?.message || 'Unknown error'}).`);
+    }
+  };
+
+  // Require a payment before restarting the game grid
+  const payAndNewGame = async () => {
+    try {
+      setPaymentStatus('');
+      if (!isConnected || !walletAddress) {
+        setPaymentStatus('⚠️ Connect wallet first.');
+        return;
+      }
+      // Ensure Base chain
+      try {
+        if (chainId !== base.id) {
+          setPaymentStatus('🔄 Switching to Base network…');
+          await switchChainAsync({ chainId: base.id });
+        }
+      } catch (switchErr) {
+        console.warn('Failed to switch to Base:', switchErr);
+        setPaymentStatus('❌ Could not switch to Base.');
+        return;
+      }
+      const toAddr = getPaymentRecipient();
+      if (!toAddr) {
+        setPaymentStatus('⚠️ Recipient not configured.');
+        return;
+      }
+      setPendingAction('newgame');
+      await sendTransaction({ to: toAddr, value: parseEther('0.00001') });
+      // Wait for confirmation to actually reset the grid
+      setPaymentStatus('⏳ Payment sent. كنْتسنا التأكيد باش نعاود اللعبة…');
+    } catch (err) {
+      console.warn('payAndNewGame error:', err);
       setPaymentStatus(`❌ Payment failed (${err?.message || 'Unknown error'}).`);
     }
   };
@@ -1844,7 +1889,29 @@ function TwoDotsGame() {
         {(gameMode === GAME_MODES.Robo || gameMode === GAME_MODES.RoboTimed) ? (
           <button onClick={() => { setGameMode(GAME_MODES.Classic); setOpponentName(''); initializeGrid(); setMenuView('home'); setShowHowTo(false); setShowMenu(true); }} className="w-full bg-gradient-to-r from-red-600 to-orange-600 text-white font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all shadow-lg">🚪 Quit PvP</button>
         ) : (
-          <button onClick={initializeGrid} className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all shadow-lg">🔄 New Game</button>
+          <>
+            <button
+              onClick={payAndNewGame}
+              disabled={!walletAddress || txPending || !effectiveDevWallet()}
+              className={`w-full ${(!walletAddress || txPending || !effectiveDevWallet()) ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-purple-500 to-pink-500'} text-white font-bold py-3 px-6 rounded-xl hover:scale-105 transition-all shadow-lg`}
+              title={!walletAddress ? 'Connect wallet first' : (!effectiveDevWallet() ? 'Recipient wallet missing' : (txPending ? 'Transaction pending' : 'Start a new game'))}
+            >
+              🔄 New Game
+            </button>
+            {paymentStatus && (
+              <div
+                className="mt-2 text-xs text-center px-3 py-2 rounded-lg border"
+                style={{
+                  background: paymentStatus.startsWith('✅') ? '#e8f5e9' : paymentStatus.startsWith('❌') ? '#ffebee' : '#fff8e1',
+                  color: paymentStatus.startsWith('✅') ? '#1b5e20' : paymentStatus.startsWith('❌') ? '#b71c1c' : '#8d6e63',
+                  borderColor: paymentStatus.startsWith('✅') ? '#a5d6a7' : paymentStatus.startsWith('❌') ? '#ef9a9a' : '#ffe082'
+                }}
+                aria-live="polite"
+              >
+                {paymentStatus}
+              </div>
+            )}
+          </>
         )}
 
         {/* Legend removed to gain space in Farcaster/Base mini app */}
