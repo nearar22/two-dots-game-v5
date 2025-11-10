@@ -455,6 +455,8 @@ function TwoDotsGame() {
   const payAndStartGame = async () => {
     try {
       setPaymentStatus('');
+      // Clear previous transaction hash to avoid using old confirmation
+      setTxHash(null);
       if (!isConnected || !walletAddress) {
         setPaymentStatus('⚠️ Connect wallet first.');
         return;
@@ -489,6 +491,8 @@ function TwoDotsGame() {
   const payAndNewGame = async () => {
     try {
       setPaymentStatus('');
+      // Clear previous transaction hash to avoid using old confirmation
+      setTxHash(null);
       if (!isConnected || !walletAddress) {
         setPaymentStatus('⚠️ Connect wallet first.');
         return;
